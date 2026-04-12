@@ -107,14 +107,14 @@ def check_experiment_generalization(experiment_name: str, metric: str = "loss", 
     Returns:
         Summary string.
     """
-    experiments = list_experiments()
+    experiments = list_experiments.invoke()
     exp = next((e for e in experiments if e['name'] == experiment_name), None)
     if not exp:
         return f"Experiment '{experiment_name}' not found."
-    runs = list_runs(exp['experiment_id'], max_results=1000)
+    runs = list_runs.invoke(exp['experiment_id'], max_results=1000)
     failed_runs = []
     for run in runs:
-        metrics = get_run_metrics(run['run_id'])
+        metrics = get_run_metrics.invoke(run['run_id'])
         train = metrics.get(f"train_{metric}")
         test = metrics.get(f"test_{metric}")
         if train is not None and test is not None:
