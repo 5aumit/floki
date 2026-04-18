@@ -111,17 +111,27 @@ def print_result(result: Any):
         console.print(result)
         return
 
-    # First pass: find tool message JSONs
-    tool_jsons = []
-    tool_calls_info = []
-    for msg in messages:
+    # Show assistant final text first (if present)
+    printed_assistant = False
+    try:
+        last = messages[-1]
+        assistant_text = getattr(last, 'content') if hasattr(last, 'content') or isinstance(last, dict) else None
+    except Exception:
+        assistant_text = None
+    if isinstance(assistant_text, str) and assistant_text.strip():
+        console.print(assistant_text)
+        printed_assistant = True
+
+    # First pass: search messages from newest to oldest for structured outputs
+    rendered_structured = False
+    for msg in reversed(messages):
         # tool calls metadata might be in additional_kwargs or tool_calls
+        tw = None
         try:
             tw = getattr(msg, 'additional_kwargs', None) or getattr(msg, 'tool_calls', None) or (msg.get('tool_calls') if isinstance(msg, dict) else None)
-            if tw:
-                tool_calls_info.append(tw)
         except Exception:
-            pass
+            tw = None
+
         content = None
         try:
             content = getattr(msg, 'content')
@@ -132,25 +142,31 @@ def print_result(result: Any):
                 content = None
         if not content:
             continue
+
         extracted = _extract_json(content)
         if extracted is not None:
-            tool_jsons.append(extracted)
+            # Print any tool-call metadata associated with this message only
+            if tw and not rendered_structured:
+                console.print(f"\n[bold cyan]Parsed tool output (from message):[/bold cyan] {tw}")
+            elif not rendered_structured:
+                console.print(f"\n[bold cyan]Parsed tool output:[/bold cyan]")
 
-    # If any tool JSONs found, prefer the first list/dict and render
-    if tool_calls_info:
-        console.print(f"[bold cyan]Tool calls:[/bold cyan] {tool_calls_info}")
-    if tool_jsons:
-        # pick first that is list of dicts or dict
-        for j in tool_jsons:
-            if isinstance(j, list) and j and isinstance(j[0], dict):
-                _print_list_of_dicts(j)
-                return
-            elif isinstance(j, dict):
+            # Render the structured JSON from this message as supplemental output
+            if isinstance(extracted, list) and extracted and isinstance(extracted[0], dict):
+                _print_list_of_dicts(extracted)
+                rendered_structured = True
+                continue
+            elif isinstance(extracted, dict):
                 try:
-                    console.print_json(json.dumps(j))
+                    console.print_json(json.dumps(extracted))
                 except Exception:
-                    console.print(str(j))
-                return
+                    console.print(str(extracted))
+                rendered_structured = True
+                continue
+
+    # If we rendered any structured supplemental output, stop here (assistant text already shown)
+    if rendered_structured:
+        return
 
     # Second pass: try to find markdown table in message texts
     for msg in messages:
