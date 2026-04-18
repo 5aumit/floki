@@ -20,3 +20,14 @@ Challenge now is how to integrate tracing while keeping a budget of $0. The API 
 Just started using Copilot CLI. Its pretty cool.
 
 LangFuse initialization isn't failing anymore, but the traces don't show up on the tool. Need to fix that.
+
+## 4/18/2026
+
+LangFuse traces are showing up. It was just an issue with the configured URL.
+
+I also just noticed that once I raise a PR, Copilot suggests changes after reviewing it. I only saw this after I had already merged the PR, but going forward I should keep this in mind. 
+
+This is actually quite useful, especially when Copilot is writing some code which I don't care enough about to understand in a lot of detail.
+
+Added a pretty banner!
+![image](assets/floki-banner.png)

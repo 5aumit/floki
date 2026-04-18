@@ -16,6 +16,40 @@ def print_text(text: str):
     console.print(text)
 
 
+def print_welcome(app_name: str = "Floki", version: str = "v0.1"):
+    """Print a colorful ASCII welcome banner with brief usage hints.
+
+    This is intended to be called once after the agent finishes initialization
+    and before the user starts interacting with the CLI.
+    """
+    from rich.panel import Panel
+    from rich.align import Align
+    from rich.text import Text
+
+    banner_lines = [
+        "   ▄████████  ▄█        ▄██████▄     ▄█   ▄█▄  ▄█  ",
+        "  ███    ███ ███       ███    ███   ███ ▄███▀ ███  ",
+        "  ███    █▀  ███       ███    ███   ███▐██▀   ███▌ ",
+        " ▄███▄▄▄     ███       ███    ███  ▄█████▀    ███▌ ",
+        "▀▀███▀▀▀     ███       ███    ███ ▀▀█████▄    ███▌ ",
+        "  ███        ███       ███    ███   ███▐██▄   ███  ",
+        "  ███        ███▌    ▄ ███    ███   ███ ▀███▄ ███  ",
+        "  ███        █████▄▄██  ▀██████▀    ███   ▀█▀ █▀   ",
+        "             ▀                      ▀              ",
+    ]
+
+    banner = "\n".join(banner_lines)
+    t = Text()
+    t.append(banner + "\n", style="bold magenta")
+    t.append(f"  {app_name} {version} 🧭\n", style="bold white on dark_green")
+    t.append("\n")
+    t.append("Welcome! Type your question and press Enter. Type 'exit' to quit.\n", style="cyan")
+    t.append("Tool outputs (tables/JSON) will appear below the assistant message when available.\n", style="dim")
+
+    panel = Panel(Align.center(t), padding=(1, 2), border_style="magenta")
+    console.print(panel)
+
+
 def _extract_json(s: str) -> Optional[Any]:
     """Try to extract JSON from a string. Handles fenced blocks and inline JSON."""
     if not isinstance(s, str):

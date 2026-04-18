@@ -117,6 +117,12 @@ def main():
     print("Initializing agent and loading tools...")
     loading_animation("Starting up, please wait...", duration=3)
     print("Agent is ready! Type 'exit' to quit.")
+    # Try to show a colorful welcome banner (non-fatal)
+    try:
+        import console_ui as ui
+        ui.print_welcome()
+    except Exception:
+        logging.debug("console_ui not available for welcome banner")
     while True:
         user_query = input("\n> ")
         if user_query.strip().lower() in {"exit", "quit"}:
