@@ -14,3 +14,9 @@ There are 2 experiments in my `mlruns`, one which is named `neural_network_digit
 Hence, tracing is important.
 
 Challenge now is how to integrate tracing while keeping a budget of $0. The API I'm using is Groq, and LangFuse is free. Need to figure out how these 2 can be integrated.
+
+## 4/17/2026
+
+Just started using Copilot CLI. Its pretty cool.
+
+LangFuse initialization isn't failing anymore, but the traces don't show up on the tool. Need to fix that.
