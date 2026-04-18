@@ -21,7 +21,7 @@ load_dotenv()
 
 import logging
 # logging.getLogger("mlflow").setLevel(logging.ERROR)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 os.environ["MLFLOW_LOGGING_LEVEL"] = "WARNING"
 
@@ -72,7 +72,17 @@ mlflow_tools = data_access.get_all_tools()
 agent = create_agent(
     model=llm,
     tools=mlflow_tools,
-    system_prompt="You are an MLflow experiment assistant. Use tools as needed.",
+    system_prompt=(
+        "You are a precise MLflow experiment assistant. RULES:\n"
+        "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess run IDs, experiment IDs, metrics, parameters, or artifact locations.\n"
+        "2) When a user requests data (experiments, runs, metrics, params, artifacts), CALL the appropriate tool and DO NOT embed raw data in your assistant message. The tool's structured output will be rendered by the UI.\n"
+        "3) After a tool call, provide a short natural-language summary (no tables, no code blocks) of <=2 sentences describing the high-level result and next steps.\n"
+        "4) If asked to return data directly, return valid JSON only (array or object), no Markdown, no ASCII tables.\n"
+        "5) On tool errors, return a JSON object: {\"error\": <code>, \"message\": <human message>}. Do not raise exceptions.\n"
+        "6) For any action that may be destructive, ask for explicit confirmation before proceeding.\n"
+        "7) Keep responses concise and focused on user's goal.\n"
+        "Adhere strictly to these rules."
+    ),
 )
 
 
@@ -113,11 +123,17 @@ def main():
             print("Goodbye!")
             break
         result = run_query(user_query)
-        # Print the last message content if available, else print the whole result
+        # Render result using rich console UI if available
         try:
-            print(f"\n{result['messages'][-1].content}")
+            import console_ui as ui
+            ui.print_result(result)
         except Exception:
-            print(f"\n{result}")
+            logging.warning("console_ui not available or failed to render result, falling back to plain print.")
+            # fallback: print last message or raw
+            try:
+                print(f"\n{result['messages'][-1].content}")
+            except Exception:
+                print(f"\n{result}")
 
 if __name__ == "__main__":
     main()
