@@ -227,6 +227,14 @@ def print_result(result: Any):
             content = last.get('content') if isinstance(last, dict) else str(last)
         except Exception:
             content = str(last)
+
+    # If we already printed the assistant text above, avoid printing it again
+    try:
+        if printed_assistant and isinstance(content, str) and isinstance(assistant_text, str) and content.strip() == assistant_text.strip():
+            return
+    except Exception:
+        pass
+
     # try JSON
     extracted = _extract_json(content) if isinstance(content, str) else None
     if extracted is not None:

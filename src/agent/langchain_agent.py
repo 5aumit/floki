@@ -38,6 +38,8 @@ with open(CONFIG_PATH, 'r') as f:
 
 # LLM selection logic
 llm_config = config.get('llm', {})
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+llm_config['groq_api_key'] = GROQ_API_KEY
 logging.info("Loading model from config: %s", llm_config.get('groq_model', 'Not Set'))
 llm = get_llm_from_config(llm_config)
 

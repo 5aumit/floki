@@ -2,16 +2,13 @@
 
 ![image](assets/floki-banner.png)
 
+> **⚠️ Work in Progress:** This project is actively being developed. Features, structure, and documentation may change frequently.
+
 Floki is named after the legendary Viking engineer Flóki Vilgerðarson, who built innovative boats that enabled Vikings to explore new lands. This project aims to empower ML researchers to explore their experiment logs with the same spirit of discovery.
 
 A CLI-based assistant for ML experimentation, inspired by Claude Code, that helps researchers query, analyze, and gain insights from MLflow experiment logs.
 
 **Quick Setup**
-
-Prerequisites:
-
-- Python 3.10+ or Conda
-- Git
 
 1) Create and activate an environment
 
@@ -36,16 +33,9 @@ Create a `.env` file in the project root or export the variables into your shell
 
 ```
 GROQ_API_KEY=your_groq_api_key_here
-LANGFUSE_API_KEY=your_langfuse_api_key_here
-LANGFUSE_API_URL=https://api.langfuse.com
-```
-
-You can also export them directly:
-
-```bash
-export GROQ_API_KEY=your_groq_api_key_here
-export LANGFUSE_API_KEY=your_langfuse_api_key_here
-export LANGFUSE_API_URL=https://api.langfuse.com
+LANGFUSE_PUBLIC_KEY=your_langfuse_api_key_here
+LANGFUSE_SECRET_KEY=your_langfuse_api_key_here
+LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"
 ```
 
 3) Run the agent or scripts
