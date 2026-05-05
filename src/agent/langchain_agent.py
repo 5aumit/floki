@@ -12,8 +12,10 @@ import threading
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from llm.inference_engine import GroqEngine, get_llm_from_config
 from mlflow_tools import data_access
-from langfuse import get_client
+# import langfuse
+from langfuse import get_client, propagate_attributes
 from langfuse.langchain import CallbackHandler
+from langgraph.store.memory import InMemoryStore
 
 
 from dotenv import load_dotenv
@@ -45,8 +47,13 @@ llm = get_llm_from_config(llm_config)
 
 # Langfuse setup — use environment variables only for simplicity
 langfuse_handler = None
+langfuse_user = config.get('langfuse', {}).get('user', 'unknown_user')
 public_key = os.getenv('LANGFUSE_PUBLIC_KEY')
 host = os.getenv('LANGFUSE_BASE_URL')
+# conversation/run tracking
+fuse_client = None
+conversation_id = None
+lf_run = None
 try:
     if public_key:
         # Prefer passing public_key; avoid secret_key kwarg for compatibility
@@ -62,7 +69,26 @@ try:
             langfuse_handler = CallbackHandler(client=fuse_client)
         except TypeError:
             langfuse_handler = CallbackHandler()
-        logging.info("Langfuse handler initialized.")
+        # create a stable conversation id for grouping traces
+        try:
+            import uuid
+            conversation_id = f"cli-{uuid.uuid4().hex[:8]}"
+        except Exception:
+            conversation_id = f"cli-{int(time.time())}"
+        # try to start a run (optional; SDKs vary)
+        try:
+            # include user metadata when creating the run if supported
+            run_kwargs = {}
+            if langfuse_user:
+                run_kwargs['user'] = langfuse_user
+            if hasattr(fuse_client, 'start_run'):
+                lf_run = fuse_client.start_run(name=conversation_id, **run_kwargs)
+            elif hasattr(fuse_client, 'runs') and hasattr(fuse_client.runs, 'create'):
+                lf_run = fuse_client.runs.create(name=conversation_id, **run_kwargs)
+        except Exception:
+            lf_run = None
+
+        logging.info("Langfuse handler initialized. conversation_id=%s", conversation_id)
     else:
         logging.info("LANGFUSE_PUBLIC_KEY not set; Langfuse tracing disabled.")
 except Exception as e:
@@ -70,10 +96,12 @@ except Exception as e:
     langfuse_handler = None
 
 mlflow_tools = data_access.get_all_tools()
+store = InMemoryStore()
 
 agent = create_agent(
     model=llm,
     tools=mlflow_tools,
+    store=store,
     system_prompt=(
         "You are a precise MLflow experiment assistant. RULES:\n"
         "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess run IDs, experiment IDs, metrics, parameters, or artifact locations.\n"
@@ -93,7 +121,14 @@ def run_query(user_query: str):
     config_kwargs = {}
     if langfuse_handler is not None:
         logging.info("Attaching Langfuse handler to agent invocation.")
+        # attach handler
         config_kwargs['callbacks'] = [langfuse_handler]
+        # include conversation metadata if agent/client supports it
+        if conversation_id is not None:
+            meta = config_kwargs.setdefault('metadata', {})
+            meta['conversation_id'] = conversation_id
+            if langfuse_user:
+                meta['user'] = langfuse_user
     # Only pass config when non-empty to avoid passing None handlers
     if config_kwargs:
         result = agent.invoke({"messages": messages}, config=config_kwargs)
@@ -126,22 +161,61 @@ def main():
     except Exception:
         logging.debug("console_ui not available for welcome banner")
     while True:
-        user_query = input("\n> ")
-        if user_query.strip().lower() in {"exit", "quit"}:
-            print("Goodbye!")
-            break
-        result = run_query(user_query)
-        # Render result using rich console UI if available
+        # Guard Langfuse context: only use if client is available
+        if fuse_client is not None:
+            obs_ctx = fuse_client.start_as_current_observation(as_type="span", name="langchain-call") if hasattr(fuse_client, 'start_as_current_observation') else None
+        else:
+            obs_ctx = None
+        if obs_ctx is not None:
+            obs_enter = obs_ctx.__enter__
+            obs_exit = obs_ctx.__exit__
+            obs_enter()
+        # propagate attributes for grouping (no-op if not configured)
+        # propagate conversation id and user so Langfuse groups events
+        prop_ctx = propagate_attributes(session_id=conversation_id, user_id=langfuse_user) if conversation_id is not None else None
         try:
-            import console_ui as ui
-            ui.print_result(result)
-        except Exception:
-            logging.warning("console_ui not available or failed to render result, falling back to plain print.")
-            # fallback: print last message or raw
-            try:
-                print(f"\n{result['messages'][-1].content}")
-            except Exception:
-                print(f"\n{result}")
+            if prop_ctx is not None:
+                prop_ctx.__enter__()
+            user_query = input("\n> ")
+            if user_query.strip().lower() in {"exit", "quit"}:
+                fuse_client.flush()
+                print("Goodbye!")
+                break
+            result = run_query(user_query)
+        finally:
+            if prop_ctx is not None:
+                try:
+                    prop_ctx.__exit__(None, None, None)
+                except Exception:
+                    pass
+            if obs_ctx is not None:
+                try:
+                    obs_exit(None, None, None)
+                except Exception:
+                    pass
+                # Render result using rich console UI if available
+                try:
+                    import console_ui as ui
+                    ui.print_result(result)
+                except Exception:
+                    logging.warning("console_ui not available or failed to render result, falling back to plain print.")
+                    # fallback: print last message or raw
+                    try:
+                        print(f"\n{result['messages'][-1].content}")
+                    except Exception:
+                        print(f"\n{result}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nInterrupted. Finishing Langfuse run if present...")
+        try:
+            if lf_run is not None:
+                if hasattr(lf_run, 'finish'):
+                    lf_run.finish()
+                elif fuse_client is not None and hasattr(fuse_client, 'finish_run'):
+                    fuse_client.finish_run(conversation_id)
+            fuse_client.flush()
+        except Exception:
+            pass

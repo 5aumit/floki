@@ -31,3 +31,9 @@ This is actually quite useful, especially when Copilot is writing some code whic
 
 Added a pretty banner!
 ![image](assets/floki-banner.png)
+
+## 5/4/2026
+
+Integrated Langfuse users and sessions. But one issue is that on Langfuse, the session traces don't show `input` and `output`, so need to fix that.
+
+Also identified a bug. The `list_runs()` tool outputs metrics and params for each run, which explodes the number of tokens in the following prompt in the chain. Need to remove that and reserve these things for a separate tool.
