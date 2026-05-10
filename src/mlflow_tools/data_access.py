@@ -83,12 +83,13 @@ def raw_list_experiments(include_deleted: bool = False, max_results: int = 100) 
 
 
 def raw_list_runs(
-    experiment_ids: List[str],
+    experiment_id: str,
     status: Optional[List[str]] = None,
     start_time: Optional[int] = None,
     end_time: Optional[int] = None,
     order_by: Optional[str] = None,
     max_results: int = 100,
+    include_metrics: bool = False,
 ) -> List[Dict[str, Any]]:
     """Return summarized runs for given experiments.
 
@@ -96,25 +97,41 @@ def raw_list_runs(
     filtering can be added later.
     """
     try:
-        runs = client.search_runs(experiment_ids, order_by=[order_by] if order_by else None, max_results=max_results)
+        runs = client.search_runs([experiment_id], order_by=[order_by] if order_by else None, max_results=max_results)
     except MlflowException as e:
         logging.error("Error listing runs: %s", e)
         raise
 
     out = []
     for run in runs:
-        metrics = dict(getattr(run, 'data', SimpleNamespace()).metrics) if hasattr(run, 'data') else {}
-        params = dict(getattr(run, 'data', SimpleNamespace()).params) if hasattr(run, 'data') else {}
-        out.append({
+        run_info = {
             'run_id': run.info.run_id,
             'run_name': getattr(run.info, 'run_name', None),
             'status': getattr(run.info, 'status', None),
             'start_time_iso': _iso_from_epoch_ms(getattr(run.info, 'start_time', None)),
             'end_time_iso': _iso_from_epoch_ms(getattr(run.info, 'end_time', None)),
-            'metrics_preview': {k: metrics[k] for i, k in enumerate(metrics) if i < 5},
-            'params_preview': {k: params[k] for i, k in enumerate(params) if i < 10},
-        })
+        }
+        if include_metrics:
+            metrics = dict(getattr(run, 'data', SimpleNamespace()).metrics) if hasattr(run, 'data') else {}
+            params = dict(getattr(run, 'data', SimpleNamespace()).params) if hasattr(run, 'data') else {}
+            run_info['metrics_preview'] = {k: metrics[k] for i, k in enumerate(metrics) if i < 5}
+            run_info['params_preview'] = {k: params[k] for i, k in enumerate(params) if i < 10}
+        out.append(run_info)
     return out
+
+
+# New: Count runs per experiment ID
+def raw_count_runs_per_experiment(experiment_ids: List[str]) -> Dict[str, int]:
+    """Return a dict of experiment_id -> number of runs."""
+    counts = {}
+    for exp_id in experiment_ids:
+        try:
+            runs = client.search_runs([exp_id], max_results=50000)
+            counts[exp_id] = len(runs)
+        except MlflowException as e:
+            logging.error(f"Error counting runs for experiment {exp_id}: {e}")
+            counts[exp_id] = -1
+    return counts
 
 
 def raw_get_run_metrics(run_id: str) -> Dict[str, float]:
@@ -222,9 +239,17 @@ def list_experiments_tool(include_deleted: bool = False, max_results: int = 100)
     return raw_list_experiments(include_deleted=include_deleted, max_results=max_results)
 
 
-@tool(description="List MLflow runs (tool wrapper).", args_schema=schemas.ListRunsParams)
-def list_runs_tool(experiment_ids: List[str], status: Optional[List[str]] = None, start_time: Optional[int] = None, end_time: Optional[int] = None, order_by: Optional[str] = None, max_results: int = 100):
-    return raw_list_runs(experiment_ids=experiment_ids, status=status, start_time=start_time, end_time=end_time, order_by=order_by, max_results=max_results)
+
+# Update tool wrapper for new signature
+@tool(description="List MLflow runs for a single experiment (tool wrapper).", args_schema=schemas.ListRunsParams)
+def list_runs_tool(experiment_id: str, status: Optional[List[str]] = None, start_time: Optional[int] = None, end_time: Optional[int] = None, order_by: Optional[str] = None, max_results: int = 100):
+    return raw_list_runs(experiment_id=experiment_id, status=status, start_time=start_time, end_time=end_time, order_by=order_by, max_results=max_results)
+
+
+# New tool wrapper for counting runs
+@tool(description="Count MLflow runs per experiment (tool wrapper).", args_schema=schemas.CountRunsPerExperimentParams)
+def count_runs_per_experiment_tool(experiment_ids: List[str]):
+    return raw_count_runs_per_experiment(experiment_ids)
 
 
 @tool(description="Get run metrics (tool wrapper).", args_schema=schemas.GetRunMetricsParams)
@@ -252,6 +277,7 @@ def get_all_tools():
     return [
         list_experiments_tool,
         list_runs_tool,
+        count_runs_per_experiment_tool,
         get_run_metrics_tool,
         get_run_params_tool,
         find_best_runs_by_metric_tool,
