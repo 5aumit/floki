@@ -15,7 +15,8 @@ from mlflow_tools import data_access
 # import langfuse
 from langfuse import get_client, propagate_attributes
 from langfuse.langchain import CallbackHandler
-from langgraph.store.memory import InMemoryStore
+from langgraph.graph import StateGraph
+from langgraph.checkpoint.memory import InMemorySaver
 
 
 from dotenv import load_dotenv
@@ -54,6 +55,7 @@ host = os.getenv('LANGFUSE_BASE_URL')
 fuse_client = None
 conversation_id = None
 lf_run = None
+FLUSH_PER_QUERY = os.getenv('LANGFUSE_FLUSH_PER_QUERY', 'false').lower() == 'true'
 try:
     if public_key:
         # Prefer passing public_key; avoid secret_key kwarg for compatibility
@@ -85,6 +87,21 @@ try:
                 lf_run = fuse_client.start_run(name=conversation_id, **run_kwargs)
             elif hasattr(fuse_client, 'runs') and hasattr(fuse_client.runs, 'create'):
                 lf_run = fuse_client.runs.create(name=conversation_id, **run_kwargs)
+            # normalize run id extraction helper
+            def _extract_run_id(run_obj):
+                if run_obj is None:
+                    return None
+                try:
+                    if hasattr(run_obj, 'id'):
+                        return getattr(run_obj, 'id')
+                    if isinstance(run_obj, dict):
+                        return run_obj.get('id') or run_obj.get('run_id') or run_obj.get('name')
+                    if isinstance(run_obj, str):
+                        return run_obj
+                except Exception:
+                    return None
+                return None
+            lf_run_id = _extract_run_id(lf_run)
         except Exception:
             lf_run = None
 
@@ -96,12 +113,12 @@ except Exception as e:
     langfuse_handler = None
 
 mlflow_tools = data_access.get_all_tools()
-store = InMemoryStore()
+checkpointer = InMemorySaver()
 
 agent = create_agent(
     model=llm,
     tools=mlflow_tools,
-    store=store,
+    checkpointer=checkpointer,
     system_prompt=(
         "You are a precise MLflow experiment assistant. RULES:\n"
         "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess run IDs, experiment IDs, metrics, parameters, or artifact locations.\n"
@@ -123,6 +140,7 @@ def run_query(user_query: str):
         logging.info("Attaching Langfuse handler to agent invocation.")
         # attach handler
         config_kwargs['callbacks'] = [langfuse_handler]
+        config_kwargs['configurable'] = {'thread_id': conversation_id or "default_thread"}
         # include conversation metadata if agent/client supports it
         if conversation_id is not None:
             meta = config_kwargs.setdefault('metadata', {})
@@ -135,6 +153,22 @@ def run_query(user_query: str):
     else:
         result = agent.invoke({"messages": messages})
     return result
+
+
+def _print_result(result):
+    try:
+        import console_ui as ui
+        ui.print_result(result)
+        return
+    except Exception:
+        pass
+    try:
+        print(f"\n{result['messages'][-1].content}")
+    except Exception:
+        try:
+            print(f"\n{result}")
+        except Exception:
+            pass
 
 
 
@@ -153,6 +187,7 @@ def main():
     print("==============================")
     print("Initializing agent and loading tools...")
     loading_animation("Starting up, please wait...", duration=3)
+    
     print("Agent is ready! Type 'exit' to quit.")
     # Try to show a colorful welcome banner (non-fatal)
     try:
@@ -160,50 +195,76 @@ def main():
         ui.print_welcome()
     except Exception:
         logging.debug("console_ui not available for welcome banner")
+    # Print tracing info if enabled
+    if fuse_client is not None:
+        print(f"Langfuse tracing enabled. See at {os.getenv('LANGFUSE_BASE_URL', 'your Langfuse dashboard')}")
+
+    # Enter session-level attribute propagation for grouping traces/observations
+    if conversation_id is not None and fuse_client is not None:
+        session_prop = propagate_attributes(session_id=conversation_id, user_id=langfuse_user)
+    else:
+        session_prop = None
+
+    if session_prop is not None:
+        with session_prop:
+            _interactive_loop(fuse_client)
+    else:
+        _interactive_loop(fuse_client)
+
+
+def _interactive_loop(fuse_client_local):
     while True:
-        # Guard Langfuse context: only use if client is available
-        if fuse_client is not None:
-            obs_ctx = fuse_client.start_as_current_observation(as_type="span", name="langchain-call") if hasattr(fuse_client, 'start_as_current_observation') else None
-        else:
-            obs_ctx = None
-        if obs_ctx is not None:
-            obs_enter = obs_ctx.__enter__
-            obs_exit = obs_ctx.__exit__
-            obs_enter()
-        # propagate attributes for grouping (no-op if not configured)
-        # propagate conversation id and user so Langfuse groups events
-        prop_ctx = propagate_attributes(session_id=conversation_id, user_id=langfuse_user) if conversation_id is not None else None
         try:
-            if prop_ctx is not None:
-                prop_ctx.__enter__()
             user_query = input("\n> ")
-            if user_query.strip().lower() in {"exit", "quit"}:
-                fuse_client.flush()
-                print("Goodbye!")
-                break
-            result = run_query(user_query)
-        finally:
-            if prop_ctx is not None:
+        except EOFError:
+            print("\nGoodbye!")
+            break
+        if user_query.strip().lower() in {"exit", "quit"}:
+            if fuse_client_local is not None and not FLUSH_PER_QUERY:
                 try:
-                    prop_ctx.__exit__(None, None, None)
+                    fuse_client_local.flush()
                 except Exception:
                     pass
-            if obs_ctx is not None:
-                try:
-                    obs_exit(None, None, None)
-                except Exception:
-                    pass
-                # Render result using rich console UI if available
-                try:
-                    import console_ui as ui
-                    ui.print_result(result)
-                except Exception:
-                    logging.warning("console_ui not available or failed to render result, falling back to plain print.")
-                    # fallback: print last message or raw
+            print("Goodbye!")
+            break
+
+        # Create a root observation/span for this query so trace-level IO is populated
+        if fuse_client_local is not None and hasattr(fuse_client_local, 'start_as_current_observation'):
+            try:
+                with fuse_client_local.start_as_current_observation(as_type="span", name="langchain-call") as obs_ctx:
                     try:
-                        print(f"\n{result['messages'][-1].content}")
+                        obs_ctx.update(input={"query": user_query})
                     except Exception:
-                        print(f"\n{result}")
+                        pass
+                    result = run_query(user_query)
+                    _print_result(result)
+                    # Try to extract a readable output snippet
+                    output_snippet = None
+                    try:
+                        output_snippet = result.get('messages')[-1].content
+                    except Exception:
+                        try:
+                            output_snippet = str(result)
+                        except Exception:
+                            output_snippet = None
+                    if output_snippet is not None:
+                        try:
+                            obs_ctx.update(output={"result": output_snippet})
+                        except Exception:
+                            pass
+                    if FLUSH_PER_QUERY:
+                        try:
+                            fuse_client_local.flush()
+                        except Exception:
+                            pass
+            except Exception:
+                # Fallback to running without explicit observation context
+                result = run_query(user_query)
+                _print_result(result)
+        else:
+            # No Langfuse client or observation support; just run the query
+            result = run_query(user_query)
+            _print_result(result)
 
 if __name__ == "__main__":
     try:
