@@ -13,7 +13,7 @@ class ListRunsParams(BaseModel):
     status: Optional[List[str]] = Field(None, description="Filter by run status, e.g. ['FINISHED']")
     start_time: Optional[int] = Field(None, description="Only runs started after this epoch ms")
     end_time: Optional[int] = Field(None, description="Only runs started before this epoch ms")
-    order_by: Optional[str] = Field(None, description="order_by clause for MLflow search_runs")
+    order_by: Optional[str] = Field(None, description="order_by clause for MLflow search_runs e.g. 'metrics.accuracy DESC', 'attributes.start_time ASC'")
     max_results: int = Field(100, description="Maximum number of runs to return.")
 
 

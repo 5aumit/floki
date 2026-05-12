@@ -4,6 +4,7 @@ LangGraph-based agent for MLflow Experiment Q&A
 This agent uses LangGraph to orchestrate LLM reasoning and MLflow tool calls.
 """
 
+
 import os
 import json
 import sys
@@ -12,11 +13,12 @@ import threading
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from llm.inference_engine import GroqEngine, get_llm_from_config
 from mlflow_tools import data_access
-# import langfuse
-from langfuse import get_client, propagate_attributes
-from langfuse.langchain import CallbackHandler
+from llm.tracing import setup_langfuse, propagate_attributes
+from llm.tracing import setup_langfuse, propagate_attributes, langfuse_user
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain.agents.middleware import wrap_tool_call
+from langchain.messages import ToolMessage
 
 
 from dotenv import load_dotenv
@@ -46,74 +48,24 @@ llm_config['groq_api_key'] = GROQ_API_KEY
 logging.info("Loading model from config: %s", llm_config.get('groq_model', 'Not Set'))
 llm = get_llm_from_config(llm_config)
 
-# Langfuse setup — use environment variables only for simplicity
-langfuse_handler = None
-langfuse_user = config.get('langfuse', {}).get('user', 'unknown_user')
-public_key = os.getenv('LANGFUSE_PUBLIC_KEY')
-host = os.getenv('LANGFUSE_BASE_URL')
-# conversation/run tracking
-fuse_client = None
-conversation_id = None
-lf_run = None
-FLUSH_PER_QUERY = os.getenv('LANGFUSE_FLUSH_PER_QUERY', 'false').lower() == 'true'
-try:
-    if public_key:
-        # Prefer passing public_key; avoid secret_key kwarg for compatibility
-        try:
-            fuse_client = get_client(public_key=public_key, host=host) if host else get_client(public_key=public_key)
-        except TypeError:
-            # Fallback: set env vars and call get_client()
-            os.environ.setdefault('LANGFUSE_PUBLIC_KEY', public_key)
-            if host:
-                os.environ.setdefault('LANGFUSE_BASE_URL', host)
-            fuse_client = get_client()
-        try:
-            langfuse_handler = CallbackHandler(client=fuse_client)
-        except TypeError:
-            langfuse_handler = CallbackHandler()
-        # create a stable conversation id for grouping traces
-        try:
-            import uuid
-            conversation_id = f"cli-{uuid.uuid4().hex[:8]}"
-        except Exception:
-            conversation_id = f"cli-{int(time.time())}"
-        # try to start a run (optional; SDKs vary)
-        try:
-            # include user metadata when creating the run if supported
-            run_kwargs = {}
-            if langfuse_user:
-                run_kwargs['user'] = langfuse_user
-            if hasattr(fuse_client, 'start_run'):
-                lf_run = fuse_client.start_run(name=conversation_id, **run_kwargs)
-            elif hasattr(fuse_client, 'runs') and hasattr(fuse_client.runs, 'create'):
-                lf_run = fuse_client.runs.create(name=conversation_id, **run_kwargs)
-            # normalize run id extraction helper
-            def _extract_run_id(run_obj):
-                if run_obj is None:
-                    return None
-                try:
-                    if hasattr(run_obj, 'id'):
-                        return getattr(run_obj, 'id')
-                    if isinstance(run_obj, dict):
-                        return run_obj.get('id') or run_obj.get('run_id') or run_obj.get('name')
-                    if isinstance(run_obj, str):
-                        return run_obj
-                except Exception:
-                    return None
-                return None
-            lf_run_id = _extract_run_id(lf_run)
-        except Exception:
-            lf_run = None
 
-        logging.info("Langfuse handler initialized. conversation_id=%s", conversation_id)
-    else:
-        logging.info("LANGFUSE_PUBLIC_KEY not set; Langfuse tracing disabled.")
-except Exception as e:
-    logging.exception("Failed to initialize Langfuse handler: %s", e)
-    langfuse_handler = None
+# Langfuse/tracing setup
+langfuse_handler, fuse_client, conversation_id, lf_run, FLUSH_PER_QUERY = setup_langfuse(config)
 
 mlflow_tools = data_access.get_all_tools()
 checkpointer = InMemorySaver()
+
+@wrap_tool_call
+def handle_tool_errors(request, handler):
+    """Handle tool execution errors with custom messages."""
+    try:
+        return handler(request)
+    except Exception as e:
+        # Return a custom error message to the model
+        return ToolMessage(
+            content=f"Tool error: Please check your input and try again. ({str(e)})",
+            tool_call_id=request.tool_call["id"]
+        )
 
 agent = create_agent(
     model=llm,
@@ -130,6 +82,7 @@ agent = create_agent(
         "7) Keep responses concise and focused on user's goal.\n"
         "Adhere strictly to these rules."
     ),
+    middleware=[handle_tool_errors]
 )
 
 
@@ -145,7 +98,7 @@ def run_query(user_query: str):
         if conversation_id is not None:
             meta = config_kwargs.setdefault('metadata', {})
             meta['conversation_id'] = conversation_id
-            if langfuse_user:
+            if langfuse_user: 
                 meta['user'] = langfuse_user
     # Only pass config when non-empty to avoid passing None handlers
     if config_kwargs:
@@ -194,7 +147,7 @@ def main():
         import console_ui as ui
         ui.print_welcome()
     except Exception:
-        logging.debug("console_ui not available for welcome banner")
+        logging.info("console_ui not available for welcome banner")
     # Print tracing info if enabled
     if fuse_client is not None:
         print(f"Langfuse tracing enabled. See at {os.getenv('LANGFUSE_BASE_URL', 'your Langfuse dashboard')}")
@@ -266,17 +219,3 @@ def _interactive_loop(fuse_client_local):
             result = run_query(user_query)
             _print_result(result)
 
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nInterrupted. Finishing Langfuse run if present...")
-        try:
-            if lf_run is not None:
-                if hasattr(lf_run, 'finish'):
-                    lf_run.finish()
-                elif fuse_client is not None and hasattr(fuse_client, 'finish_run'):
-                    fuse_client.finish_run(conversation_id)
-            fuse_client.flush()
-        except Exception:
-            pass

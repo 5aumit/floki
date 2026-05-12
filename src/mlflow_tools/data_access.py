@@ -31,7 +31,8 @@ except Exception:
 from . import schemas
 
 # Keep MLflow logs quieter by default
-os.environ.setdefault("MLFLOW_LOGGING_LEVEL", "WARNING")
+# os.environ.setdefault("MLFLOW_LOGGING_LEVEL", "WARNING")
+logging.getLogger("mlflow").setLevel(logging.WARNING)
 
 # Load mlruns_dir from global config
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config.json'))
@@ -96,6 +97,8 @@ def raw_list_runs(
     Note: MLflowClient.search_runs accepts experiment_ids and order_by; more complex
     filtering can be added later.
     """
+    if experiment_id.lower() in ["all","*"]:
+        raise ValueError("Listing runs across all experiments is not supported for token economy. Please specify a single experiment ID.")
     try:
         runs = client.search_runs([experiment_id], order_by=[order_by] if order_by else None, max_results=max_results)
     except MlflowException as e:
@@ -162,6 +165,9 @@ def raw_find_best_runs_by_metric(
     filter_params: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     """Return top-k runs ordered by metric (max or min)."""
+
+    if experiment_ids.lower() in ["all","*"]:
+        raise ValueError("To search across all experiments, use a list of all experiment IDs obtained from list_experiments.")
     order = f"metrics.{metric} DESC" if mode == 'max' else f"metrics.{metric} ASC"
     try:
         runs = client.search_runs(experiment_ids, order_by=[order], max_results=top_k)
@@ -210,7 +216,7 @@ def raw_check_experiment_generalization(
         raise
 
     experiment_id = getattr(exp, 'experiment_id', None)
-    runs = raw_list_runs([experiment_id], max_results=1000)
+    runs = raw_list_runs(experiment_id=experiment_id, max_results=1000)
 
     failing = []
     for r in runs:
@@ -236,40 +242,68 @@ def raw_check_experiment_generalization(
 
 @tool(description="List MLflow experiments (tool wrapper).", args_schema=schemas.ListExperimentsParams)
 def list_experiments_tool(include_deleted: bool = False, max_results: int = 100):
-    return raw_list_experiments(include_deleted=include_deleted, max_results=max_results)
+    result = raw_list_experiments(include_deleted=include_deleted, max_results=max_results)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 
 # Update tool wrapper for new signature
 @tool(description="List MLflow runs for a single experiment (tool wrapper).", args_schema=schemas.ListRunsParams)
 def list_runs_tool(experiment_id: str, status: Optional[List[str]] = None, start_time: Optional[int] = None, end_time: Optional[int] = None, order_by: Optional[str] = None, max_results: int = 100):
-    return raw_list_runs(experiment_id=experiment_id, status=status, start_time=start_time, end_time=end_time, order_by=order_by, max_results=max_results)
+    result = raw_list_runs(experiment_id=experiment_id, status=status, start_time=start_time, end_time=end_time, order_by=order_by, max_results=max_results)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 # New tool wrapper for counting runs
 @tool(description="Count MLflow runs per experiment (tool wrapper).", args_schema=schemas.CountRunsPerExperimentParams)
 def count_runs_per_experiment_tool(experiment_ids: List[str]):
-    return raw_count_runs_per_experiment(experiment_ids)
+    result = raw_count_runs_per_experiment(experiment_ids)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 @tool(description="Get run metrics (tool wrapper).", args_schema=schemas.GetRunMetricsParams)
 def get_run_metrics_tool(run_id: str):
-    return raw_get_run_metrics(run_id)
+    result = raw_get_run_metrics(run_id)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 @tool(description="Get run params (tool wrapper).", args_schema=schemas.GetRunParamsParams)
 def get_run_params_tool(run_id: str):
-    return raw_get_run_params(run_id)
+    result = raw_get_run_params(run_id)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 @tool(description="Find top runs by metric (tool wrapper).", args_schema=schemas.FindBestRunByMetricParams)
 def find_best_runs_by_metric_tool(experiment_ids: List[str], metric: str, mode: str = 'max', top_k: int = 1):
-    return raw_find_best_runs_by_metric(experiment_ids=experiment_ids, metric=metric, mode=mode, top_k=top_k)
+    result = raw_find_best_runs_by_metric(experiment_ids=experiment_ids, metric=metric, mode=mode, top_k=top_k)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 @tool(description="Check experiment generalization (tool wrapper).", args_schema=schemas.CheckExperimentGeneralizationParams)
 def check_experiment_generalization_tool(experiment_id_or_name: str, train_metric: str = 'train_loss', test_metric: str = 'test_loss', threshold_abs: Optional[float] = None, threshold_rel: Optional[float] = 0.2):
-    return raw_check_experiment_generalization(experiment_id_or_name=experiment_id_or_name, train_metric=train_metric, test_metric=test_metric, threshold_abs=threshold_abs, threshold_rel=threshold_rel)
+    result = raw_check_experiment_generalization(experiment_id_or_name=experiment_id_or_name, train_metric=train_metric, test_metric=test_metric, threshold_abs=threshold_abs, threshold_rel=threshold_rel)
+    try:
+        return json.dumps(result, default=str)
+    except Exception:
+        return str(result)
 
 
 def get_all_tools():
