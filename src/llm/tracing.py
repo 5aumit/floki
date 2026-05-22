@@ -33,7 +33,7 @@ def setup_langfuse(config):
     lf_run = None
     FLUSH_PER_QUERY = os.getenv('LANGFUSE_FLUSH_PER_QUERY', 'false').lower() == 'true'
     if get_client is None:
-        return None, None, None, None, FLUSH_PER_QUERY
+        return None, None, None, None, None, FLUSH_PER_QUERY
     try:
         if public_key:
             try:
@@ -70,6 +70,6 @@ def setup_langfuse(config):
         langfuse_handler = None
 
     # Return the initialized objects (may be None if disabled)
-    return langfuse_handler, fuse_client, conversation_id, lf_run, FLUSH_PER_QUERY
+    return langfuse_handler, fuse_client, conversation_id, lf_run, langfuse_user, FLUSH_PER_QUERY
 # Re-export propagate_attributes for convenience
 __all__ = ["setup_langfuse", "propagate_attributes", "langfuse_user"]

@@ -14,11 +14,8 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from llm.inference_engine import GroqEngine, get_llm_from_config
 from mlflow_tools import data_access
 from llm.tracing import setup_langfuse, propagate_attributes
-from llm.tracing import setup_langfuse, propagate_attributes, langfuse_user
-from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import InMemorySaver
-from langchain.agents.middleware import wrap_tool_call
-from langchain.messages import ToolMessage
+from agent.agent_middleware import handle_tool_errors, classify_and_set_schema
 
 
 from dotenv import load_dotenv
@@ -50,22 +47,12 @@ llm = get_llm_from_config(llm_config)
 
 
 # Langfuse/tracing setup
-langfuse_handler, fuse_client, conversation_id, lf_run, FLUSH_PER_QUERY = setup_langfuse(config)
+langfuse_handler, fuse_client, conversation_id, lf_run, langfuse_user, FLUSH_PER_QUERY = setup_langfuse(config)
 
 mlflow_tools = data_access.get_all_tools()
 checkpointer = InMemorySaver()
 
-@wrap_tool_call
-def handle_tool_errors(request, handler):
-    """Handle tool execution errors with custom messages."""
-    try:
-        return handler(request)
-    except Exception as e:
-        # Return a custom error message to the model
-        return ToolMessage(
-            content=f"Tool error: Please check your input and try again. ({str(e)})",
-            tool_call_id=request.tool_call["id"]
-        )
+
 
 agent = create_agent(
     model=llm,
@@ -82,7 +69,8 @@ agent = create_agent(
         "7) Keep responses concise and focused on user's goal.\n"
         "Adhere strictly to these rules."
     ),
-    middleware=[handle_tool_errors]
+    middleware=[classify_and_set_schema, handle_tool_errors],
+    
 )
 
 

@@ -37,3 +37,9 @@ Added a pretty banner!
 Integrated Langfuse users and sessions. But one issue is that on Langfuse, the session traces don't show `input` and `output`, so need to fix that.
 
 Also identified a bug. The `list_runs()` tool outputs metrics and params for each run, which explodes the number of tokens in the following prompt in the chain. Need to remove that and reserve these things for a separate tool.
+
+## 5/14/2026
+
+Kind of fixed the last issue about the tool. Split it into two.
+
+Right now working on using the structured responses from langchain. The outputs kind of suck, because the model just returns a message, and any tables that get rendered are taken from intermediate tool calls, which is bad. But the structured response doesn't seem to be working. Langfuse or Groq dashboards don't show the intent routing model even being called.

@@ -252,8 +252,8 @@ def list_experiments_tool(include_deleted: bool = False, max_results: int = 100)
 
 # Update tool wrapper for new signature
 @tool(description="List MLflow runs for a single experiment (tool wrapper).", args_schema=schemas.ListRunsParams)
-def list_runs_tool(experiment_id: str, status: Optional[List[str]] = None, start_time: Optional[int] = None, end_time: Optional[int] = None, order_by: Optional[str] = None, max_results: int = 100):
-    result = raw_list_runs(experiment_id=experiment_id, status=status, start_time=start_time, end_time=end_time, order_by=order_by, max_results=max_results)
+def list_runs_tool(experiment_id: str, status: Optional[List[str]] = None, start_time: Optional[int] = None, end_time: Optional[int] = None, order_by: Optional[str] = None, max_results: int = 100, include_metrics: bool = False):
+    result = raw_list_runs(experiment_id=experiment_id, status=status, start_time=start_time, end_time=end_time, order_by=order_by, max_results=max_results, include_metrics=include_metrics)
     try:
         return json.dumps(result, default=str)
     except Exception:

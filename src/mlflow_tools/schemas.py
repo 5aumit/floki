@@ -15,6 +15,7 @@ class ListRunsParams(BaseModel):
     end_time: Optional[int] = Field(None, description="Only runs started before this epoch ms")
     order_by: Optional[str] = Field(None, description="order_by clause for MLflow search_runs e.g. 'metrics.accuracy DESC', 'attributes.start_time ASC'")
     max_results: int = Field(100, description="Maximum number of runs to return.")
+    include_metrics: bool = Field(False, description="Whether to include metrics in the response.")
 
 
 # New: schema for counting runs per experiment
