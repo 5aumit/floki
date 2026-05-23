@@ -1,6 +1,8 @@
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from rich.markdown import Markdown
+from rich.text import Text
 import json
 import re
 from typing import Any, List, Optional
@@ -16,12 +18,16 @@ def print_text(text: str):
     console.print(text)
 
 
-def print_welcome(app_name: str = "Floki", version: str = "v0.1"):
-    """Print a colorful ASCII welcome banner with brief usage hints.
+def print_user(text: str):
+    """Print a user message with a clear 'You' tag."""
+    try:
+        console.print(f"[bold white on dark_blue] You [/bold white on dark_blue] {text}")
+    except Exception:
+        console.print(f"You: {text}")
 
-    This is intended to be called once after the agent finishes initialization
-    and before the user starts interacting with the CLI.
-    """
+
+# Purple → Blue gradient with glow effect
+def print_welcome(app_name: str = "Floki", version: str = "v0.1"):
     from rich.panel import Panel
     from rich.align import Align
     from rich.text import Text
@@ -38,15 +44,39 @@ def print_welcome(app_name: str = "Floki", version: str = "v0.1"):
         "             ▀                      ▀              ",
     ]
 
-    banner = "\n".join(banner_lines)
+    # Purple → Blue gradient
+    colors = [
+        "#dd22ff",  # bright magenta
+        "#cc22ff",
+        "#bb22ff",
+        "#9922ff",  # purple
+        "#7722ff",
+        "#5533ff",  # purple-blue
+        "#3355ff",  # blue
+        "#2266ff",  # bright blue
+    ]
+
     t = Text()
-    t.append(banner + "\n", style="bold magenta")
+    
+    # Add glow layer (dim version as shadow)
+    banner_glow = "\n".join(banner_lines)
+    t.append(banner_glow + "\n\n\n", style="dim #5533ff")
+    
+    # Overlay gradient banner on top
+    t_banner = Text()
+    for line, color in zip(banner_lines, colors):
+        t_banner.append(line + "\n", style=f"bold {color}")
+    
+    t = Text()
+    for line, color in zip(banner_lines, colors):
+        t.append(line + "\n", style=f"bold {color}")
+    t.append("\n")
     t.append(f"  {app_name} {version} 🧭\n", style="bold white on dark_green")
     t.append("\n")
     t.append("Welcome! Type your question and press Enter. Type 'exit' to quit.\n", style="cyan")
     t.append("Tool outputs (tables/JSON) will appear below the assistant message when available.\n", style="dim")
 
-    panel = Panel(Align.center(t), padding=(1, 2), border_style="magenta")
+    panel = Panel(Align.center(t), padding=(1, 2), border_style="bright_blue")
     console.print(panel)
 
 
@@ -123,16 +153,63 @@ def _print_list_of_dicts(lst: List[dict]):
     console.print(table)
 
 
-def print_result(result: Any):
-    """Render a langchain/agent result structure nicely.
+def _render_block_response(block_resp: dict):
+    """Render a BlockResponse dict which contains ordered blocks.
 
-    Strategy:
-    - Prefer structured tool outputs (JSON) found in tool messages.
-    - If not found, try to parse a markdown table from the agent text.
-    - Fallback to pretty JSON or plain text.
+    Each block is expected to be a dict with keys:
+    - type: "text" or "table"
+    - markdown: string containing markdown
+    """
+    blocks = block_resp.get("blocks") or []
+    for blk in blocks:
+        if not isinstance(blk, dict):
+            console.print(str(blk))
+            continue
+        btype = blk.get("type")
+        md = blk.get("markdown", "")
+        if btype == "text":
+            try:
+                console.print(Markdown(md))
+            except Exception:
+                console.print(md)
+        elif btype == "table":
+            # Prefer to render as a parsed markdown table for nicer column alignment
+            md_table = _parse_markdown_table(md)
+            if md_table:
+                _print_list_of_dicts(md_table)
+            else:
+                try:
+                    console.print(Markdown(md))
+                except Exception:
+                    console.print(md)
+        else:
+            # Unknown block type; print raw representation
+            if isinstance(md, str) and md.strip():
+                try:
+                    console.print(Markdown(md))
+                except Exception:
+                    console.print(md)
+            else:
+                console.print(str(blk))
+
+
+def print_result(result: Any):
+    """Render a langchain/agent result structure assuming BlockResponse schema.
+
+    Behavior:
+    - Prefer the assistant's final message and expect it to be a BlockResponse
+      (JSON with a top-level 'blocks' array). Each block is rendered in order.
+    - If the final message does not contain a valid BlockResponse, fall back to
+      printing the content as Markdown or a parsed markdown table when possible.
+    - Prints a clear 'Floki' tag before assistant outputs.
     """
     if not result:
         console.print("<no result>")
+        return
+
+    # Prefer structured_response from ToolStrategy when available
+    if isinstance(result, dict) and isinstance(result.get("structured_response"), dict):
+        _render_block_response(result["structured_response"])
         return
 
     messages = None
@@ -141,106 +218,60 @@ def print_result(result: Any):
     elif hasattr(result, 'messages'):
         messages = result.messages
 
+    # If there are no messages, maybe the result itself is already a BlockResponse
     if not messages:
-        console.print(result)
+        if isinstance(result, dict) and isinstance(result.get("blocks"), list):
+            _render_block_response(result)
+            return
+        # Fallback: print raw/pretty
+        try:
+            if isinstance(result, str):
+                console.print(Markdown(result))
+            else:
+                console.print(result)
+        except Exception:
+            console.print(str(result))
         return
 
-    # Show assistant final text first (if present)
-    printed_assistant = False
+    # Focus on the assistant's final message only (ignore intermediate tool outputs)
+    last = messages[-1]
     try:
-        last = messages[-1]
-        assistant_text = getattr(last, 'content') if hasattr(last, 'content') or isinstance(last, dict) else None
+        if isinstance(last, dict):
+            content = last.get('content')
+        else:
+            content = getattr(last, 'content', None)
     except Exception:
-        assistant_text = None
-    if isinstance(assistant_text, str) and assistant_text.strip():
-        console.print(assistant_text)
-        printed_assistant = True
-
-    # First pass: search messages from newest to oldest for structured outputs
-    rendered_structured = False
-    for msg in reversed(messages):
-        # tool calls metadata might be in additional_kwargs or tool_calls
-        tw = None
-        try:
-            tw = getattr(msg, 'additional_kwargs', None) or getattr(msg, 'tool_calls', None) or (msg.get('tool_calls') if isinstance(msg, dict) else None)
-        except Exception:
-            tw = None
-
         content = None
-        try:
-            content = getattr(msg, 'content')
-        except Exception:
-            try:
-                content = msg.get('content') if isinstance(msg, dict) else None
-            except Exception:
-                content = None
-        if not content:
-            continue
 
-        extracted = _extract_json(content)
-        if extracted is not None:
-            # Print any tool-call metadata associated with this message only
-            if tw and not rendered_structured:
-                console.print(f"\n[bold cyan]Parsed tool output (from message):[/bold cyan] {tw}")
-            elif not rendered_structured:
-                console.print(f"\n[bold cyan]Parsed tool output:[/bold cyan]")
-
-            # Render the structured JSON from this message as supplemental output
-            if isinstance(extracted, list) and extracted and isinstance(extracted[0], dict):
-                _print_list_of_dicts(extracted)
-                rendered_structured = True
-                continue
-            elif isinstance(extracted, dict):
-                try:
-                    console.print_json(json.dumps(extracted))
-                except Exception:
-                    console.print(str(extracted))
-                rendered_structured = True
-                continue
-
-    # If we rendered any structured supplemental output, stop here (assistant text already shown)
-    if rendered_structured:
+    # If content is already a dict-like BlockResponse
+    if isinstance(content, dict) and isinstance(content.get('blocks'), list):
+        _render_block_response(content)
         return
 
-    # Second pass: try to find markdown table in message texts
-    for msg in messages:
-        try:
-            content = getattr(msg, 'content')
-        except Exception:
-            try:
-                content = msg.get('content') if isinstance(msg, dict) else None
-            except Exception:
-                content = None
-        if not content:
-            continue
+    # If content is a string, try to extract JSON (handles embedded/quoted JSON)
+    if isinstance(content, str):
+        extracted = _extract_json(content)
+        if isinstance(extracted, dict) and isinstance(extracted.get('blocks'), list):
+            _render_block_response(extracted)
+            return
+        # Try parsing a markdown table as a fallback, but render remaining text too
         md_table = _parse_markdown_table(content)
         if md_table:
             _print_list_of_dicts(md_table)
+            # print remaining text after table if present
+            import re as _re
+            m = _re.search(r"(\|[^\n]+\n\|[ \-:|]+\n(?:\|.*\n)*)", content, _re.DOTALL)
+            if m:
+                rest = content.replace(m.group(1), "", 1).strip()
+                if rest:
+                    console.print(Markdown(rest))
             return
+        # Otherwise render as Markdown
+        console.print(Markdown(content))
+        return
 
-    # Fallback: print the last message content prettily
-    last = messages[-1]
+    # Final fallback: print stringified content
     try:
-        content = getattr(last, 'content')
+        console.print(str(content))
     except Exception:
-        try:
-            content = last.get('content') if isinstance(last, dict) else str(last)
-        except Exception:
-            content = str(last)
-
-    # If we already printed the assistant text above, avoid printing it again
-    try:
-        if printed_assistant and isinstance(content, str) and isinstance(assistant_text, str) and content.strip() == assistant_text.strip():
-            return
-    except Exception:
-        pass
-
-    # try JSON
-    extracted = _extract_json(content) if isinstance(content, str) else None
-    if extracted is not None:
-        try:
-            console.print_json(json.dumps(extracted))
-        except Exception:
-            console.print(extracted)
-    else:
         console.print(content)

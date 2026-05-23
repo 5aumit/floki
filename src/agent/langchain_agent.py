@@ -4,6 +4,7 @@ LangGraph-based agent for MLflow Experiment Q&A
 This agent uses LangGraph to orchestrate LLM reasoning and MLflow tool calls.
 """
 
+
 import os
 import json
 import sys
@@ -12,8 +13,10 @@ import threading
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from llm.inference_engine import GroqEngine, get_llm_from_config
 from mlflow_tools import data_access
-from langfuse import get_client
-from langfuse.langchain import CallbackHandler
+from llm.tracing import setup_langfuse, propagate_attributes
+from langgraph.checkpoint.memory import InMemorySaver
+from langchain.agents.structured_output import ToolStrategy
+from agent.agent_middleware import handle_tool_errors, BLOCK_RESPONSE_SCHEMA
 
 
 from dotenv import load_dotenv
@@ -43,48 +46,36 @@ llm_config['groq_api_key'] = GROQ_API_KEY
 logging.info("Loading model from config: %s", llm_config.get('groq_model', 'Not Set'))
 llm = get_llm_from_config(llm_config)
 
-# Langfuse setup — use environment variables only for simplicity
-langfuse_handler = None
-public_key = os.getenv('LANGFUSE_PUBLIC_KEY')
-host = os.getenv('LANGFUSE_BASE_URL')
-try:
-    if public_key:
-        # Prefer passing public_key; avoid secret_key kwarg for compatibility
-        try:
-            fuse_client = get_client(public_key=public_key, host=host) if host else get_client(public_key=public_key)
-        except TypeError:
-            # Fallback: set env vars and call get_client()
-            os.environ.setdefault('LANGFUSE_PUBLIC_KEY', public_key)
-            if host:
-                os.environ.setdefault('LANGFUSE_BASE_URL', host)
-            fuse_client = get_client()
-        try:
-            langfuse_handler = CallbackHandler(client=fuse_client)
-        except TypeError:
-            langfuse_handler = CallbackHandler()
-        logging.info("Langfuse handler initialized.")
-    else:
-        logging.info("LANGFUSE_PUBLIC_KEY not set; Langfuse tracing disabled.")
-except Exception as e:
-    logging.exception("Failed to initialize Langfuse handler: %s", e)
-    langfuse_handler = None
+
+# Langfuse/tracing setup
+langfuse_handler, fuse_client, conversation_id, lf_run, langfuse_user, FLUSH_PER_QUERY = setup_langfuse(config)
 
 mlflow_tools = data_access.get_all_tools()
+checkpointer = InMemorySaver()
+
+
 
 agent = create_agent(
     model=llm,
     tools=mlflow_tools,
+    checkpointer=checkpointer,
+    response_format=ToolStrategy(schema=BLOCK_RESPONSE_SCHEMA),
     system_prompt=(
         "You are a precise MLflow experiment assistant. RULES:\n"
-        "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess run IDs, experiment IDs, metrics, parameters, or artifact locations.\n"
-        "2) When a user requests data (experiments, runs, metrics, params, artifacts), CALL the appropriate tool and DO NOT embed raw data in your assistant message. The tool's structured output will be rendered by the UI.\n"
-        "3) After a tool call, provide a short natural-language summary (no tables, no code blocks) of <=2 sentences describing the high-level result and next steps.\n"
-        "4) If asked to return data directly, return valid JSON only (array or object), no Markdown, no ASCII tables.\n"
-        "5) On tool errors, return a JSON object: {\"error\": <code>, \"message\": <human message>}. Do not raise exceptions.\n"
-        "6) For any action that may be destructive, ask for explicit confirmation before proceeding.\n"
-        "7) Keep responses concise and focused on user's goal.\n"
-        "Adhere strictly to these rules."
+        "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess information.\n"
+        "2) Keep responses concise and focused on the user's MLflow goals.\n"
+        "3) If a tool encounters an error, explain the issue in a text block. Do not raise exceptions.\n"
+        "4) For destructive actions, ask for explicit confirmation in a text block before proceeding.\n"
+        "\n"
+        "OUTPUT SCHEMA (edit this section if needed):\n"
+        "- Return JSON only, in this exact shape:\n"
+        "  {\"blocks\": [{\"type\": \"text\", \"markdown\": \"...\"} | {\"type\": \"table\", \"markdown\": \"|h|...\"}]}\n"
+        "- Use type=\"text\" for analysis, summaries, and next steps.\n"
+        "- Use type=\"table\" only for clean Markdown pipe tables when comparisons are requested or helpful.\n"
+        "- Do not use TextBlock/TableBlock or any other keys; only blocks/type/markdown are allowed."
     ),
+    middleware=[handle_tool_errors],
+    
 )
 
 
@@ -93,13 +84,37 @@ def run_query(user_query: str):
     config_kwargs = {}
     if langfuse_handler is not None:
         logging.info("Attaching Langfuse handler to agent invocation.")
+        # attach handler
         config_kwargs['callbacks'] = [langfuse_handler]
+        config_kwargs['configurable'] = {'thread_id': conversation_id or "default_thread"}
+        # include conversation metadata if agent/client supports it
+        if conversation_id is not None:
+            meta = config_kwargs.setdefault('metadata', {})
+            meta['conversation_id'] = conversation_id
+            if langfuse_user: 
+                meta['user'] = langfuse_user
     # Only pass config when non-empty to avoid passing None handlers
     if config_kwargs:
         result = agent.invoke({"messages": messages}, config=config_kwargs)
     else:
         result = agent.invoke({"messages": messages})
     return result
+
+
+def _print_result(result):
+    try:
+        import console_ui as ui
+        ui.print_result(result)
+        return
+    except Exception:
+        pass
+    try:
+        print(f"\n{result['messages'][-1].content}")
+    except Exception:
+        try:
+            print(f"\n{result}")
+        except Exception:
+            pass
 
 
 
@@ -118,30 +133,106 @@ def main():
     print("==============================")
     print("Initializing agent and loading tools...")
     loading_animation("Starting up, please wait...", duration=3)
+    
     print("Agent is ready! Type 'exit' to quit.")
     # Try to show a colorful welcome banner (non-fatal)
     try:
         import console_ui as ui
         ui.print_welcome()
     except Exception:
-        logging.debug("console_ui not available for welcome banner")
-    while True:
-        user_query = input("\n> ")
-        if user_query.strip().lower() in {"exit", "quit"}:
-            print("Goodbye!")
-            break
-        result = run_query(user_query)
-        # Render result using rich console UI if available
+        logging.info("console_ui not available for welcome banner")
+    # Print tracing info if enabled
+    if fuse_client is not None:
+        print(f"Langfuse tracing enabled. See at {os.getenv('LANGFUSE_BASE_URL', 'your Langfuse dashboard')}")
+
+    # Enter session-level attribute propagation for grouping traces/observations
+    if conversation_id is not None and fuse_client is not None:
+        session_prop = propagate_attributes(session_id=conversation_id, user_id=langfuse_user)
+    else:
+        session_prop = None
+
+    if session_prop is not None:
+        with session_prop:
+            _interactive_loop(fuse_client)
+    else:
+        _interactive_loop(fuse_client)
+
+
+def _get_user_input():
+    """Get user input using prompt_toolkit if available, otherwise fall back.
+
+    Tries prompt_toolkit (rich features), then Rich Console.input, then builtin input.
+    Raises EOFError up to the caller to handle termination.
+    """
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.formatted_text import HTML
+        session = PromptSession()
+        prompt_html = HTML('<ansiblue>You</ansiblue> ')
+        return session.prompt(prompt_html)
+    except Exception:
         try:
             import console_ui as ui
-            ui.print_result(result)
+            return ui.console.input("\n[bold blue]You[/bold blue] ")
         except Exception:
-            logging.warning("console_ui not available or failed to render result, falling back to plain print.")
-            # fallback: print last message or raw
-            try:
-                print(f"\n{result['messages'][-1].content}")
-            except Exception:
-                print(f"\n{result}")
+            # last fallback to builtin input; let EOFError bubble up
+            return input("\n> ")
 
-if __name__ == "__main__":
-    main()
+
+def _interactive_loop(fuse_client_local):
+    while True:
+        try:
+            user_query = _get_user_input()
+        except EOFError:
+            print("\nGoodbye!")
+            break
+        except KeyboardInterrupt:
+            # User pressed Ctrl-C; continue the loop to allow graceful exit
+            print("\nInterrupted. Goodbye!")
+            continue
+        if user_query.strip().lower() in {"exit", "quit"}:
+            if fuse_client_local is not None and not FLUSH_PER_QUERY:
+                try:
+                    fuse_client_local.flush()
+                except Exception:
+                    pass
+            print("Goodbye!")
+            break
+
+        # Create a root observation/span for this query so trace-level IO is populated
+        if fuse_client_local is not None and hasattr(fuse_client_local, 'start_as_current_observation'):
+            try:
+                with fuse_client_local.start_as_current_observation(as_type="span", name="langchain-call") as obs_ctx:
+                    try:
+                        obs_ctx.update(input={"query": user_query})
+                    except Exception:
+                        pass
+                    result = run_query(user_query)
+                    _print_result(result)
+                    # Try to extract a readable output snippet
+                    output_snippet = None
+                    try:
+                        output_snippet = result.get('messages')[-1].content
+                    except Exception:
+                        try:
+                            output_snippet = str(result)
+                        except Exception:
+                            output_snippet = None
+                    if output_snippet is not None:
+                        try:
+                            obs_ctx.update(output={"result": output_snippet})
+                        except Exception:
+                            pass
+                    if FLUSH_PER_QUERY:
+                        try:
+                            fuse_client_local.flush()
+                        except Exception:
+                            pass
+            except Exception:
+                # Fallback to running without explicit observation context
+                result = run_query(user_query)
+                _print_result(result)
+        else:
+            # No Langfuse client or observation support; just run the query
+            result = run_query(user_query)
+            _print_result(result)

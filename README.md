@@ -1,6 +1,6 @@
 # Floki 🧭 — MLflow Experiment Agentic Chatbot
 
-![image](assets/floki-banner.png)
+![image](assets/floki-banner-2.png)
 
 > **⚠️ Work in Progress:** This project is actively being developed. Features, structure, and documentation may change frequently.
 

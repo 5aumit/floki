@@ -9,12 +9,18 @@ class ListExperimentsParams(BaseModel):
     max_results: int = Field(100, description="Maximum number of experiments to return")
 
 class ListRunsParams(BaseModel):
-    experiment_ids: List[str] = Field(..., description="IDs of the experiments to list runs for.")
+    experiment_id: str = Field(..., description="ID of the experiment to list runs for.")
     status: Optional[List[str]] = Field(None, description="Filter by run status, e.g. ['FINISHED']")
     start_time: Optional[int] = Field(None, description="Only runs started after this epoch ms")
     end_time: Optional[int] = Field(None, description="Only runs started before this epoch ms")
-    order_by: Optional[str] = Field(None, description="order_by clause for MLflow search_runs")
+    order_by: Optional[str] = Field(None, description="order_by clause for MLflow search_runs e.g. 'metrics.accuracy DESC', 'attributes.start_time ASC'")
     max_results: int = Field(100, description="Maximum number of runs to return.")
+    include_metrics: bool = Field(False, description="Whether to include metrics in the response.")
+
+
+# New: schema for counting runs per experiment
+class CountRunsPerExperimentParams(BaseModel):
+    experiment_ids: List[str] = Field(..., description="IDs of the experiments to count runs for.")
 
 class GetRunMetricsParams(BaseModel):
     run_id: str = Field(..., description="ID of the run to get metrics for.")

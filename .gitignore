@@ -37,4 +37,6 @@ config.json
 .vscode/
 .github/
 .env
+.agents/
+skills-lock.json
 tests/
