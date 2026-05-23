@@ -15,7 +15,8 @@ from llm.inference_engine import GroqEngine, get_llm_from_config
 from mlflow_tools import data_access
 from llm.tracing import setup_langfuse, propagate_attributes
 from langgraph.checkpoint.memory import InMemorySaver
-from agent.agent_middleware import handle_tool_errors, classify_and_set_schema
+from langchain.agents.structured_output import ToolStrategy
+from agent.agent_middleware import handle_tool_errors, BLOCK_RESPONSE_SCHEMA
 
 
 from dotenv import load_dotenv
@@ -58,18 +59,22 @@ agent = create_agent(
     model=llm,
     tools=mlflow_tools,
     checkpointer=checkpointer,
+    response_format=ToolStrategy(schema=BLOCK_RESPONSE_SCHEMA),
     system_prompt=(
         "You are a precise MLflow experiment assistant. RULES:\n"
-        "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess run IDs, experiment IDs, metrics, parameters, or artifact locations.\n"
-        "2) When a user requests data (experiments, runs, metrics, params, artifacts), CALL the appropriate tool and DO NOT embed raw data in your assistant message. The tool's structured output will be rendered by the UI.\n"
-        "3) After a tool call, provide a short natural-language summary (no tables, no code blocks) of <=2 sentences describing the high-level result and next steps.\n"
-        "4) If asked to return data directly, return valid JSON only (array or object), no Markdown, no ASCII tables.\n"
-        "5) On tool errors, return a JSON object: {\"error\": <code>, \"message\": <human message>}. Do not raise exceptions.\n"
-        "6) For any action that may be destructive, ask for explicit confirmation before proceeding.\n"
-        "7) Keep responses concise and focused on user's goal.\n"
-        "Adhere strictly to these rules."
+        "1) Always use the provided tools to fetch or query MLflow data. Do not invent or guess information.\n"
+        "2) Keep responses concise and focused on the user's MLflow goals.\n"
+        "3) If a tool encounters an error, explain the issue in a text block. Do not raise exceptions.\n"
+        "4) For destructive actions, ask for explicit confirmation in a text block before proceeding.\n"
+        "\n"
+        "OUTPUT SCHEMA (edit this section if needed):\n"
+        "- Return JSON only, in this exact shape:\n"
+        "  {\"blocks\": [{\"type\": \"text\", \"markdown\": \"...\"} | {\"type\": \"table\", \"markdown\": \"|h|...\"}]}\n"
+        "- Use type=\"text\" for analysis, summaries, and next steps.\n"
+        "- Use type=\"table\" only for clean Markdown pipe tables when comparisons are requested or helpful.\n"
+        "- Do not use TextBlock/TableBlock or any other keys; only blocks/type/markdown are allowed."
     ),
-    middleware=[classify_and_set_schema, handle_tool_errors],
+    middleware=[handle_tool_errors],
     
 )
 
@@ -153,13 +158,38 @@ def main():
         _interactive_loop(fuse_client)
 
 
+def _get_user_input():
+    """Get user input using prompt_toolkit if available, otherwise fall back.
+
+    Tries prompt_toolkit (rich features), then Rich Console.input, then builtin input.
+    Raises EOFError up to the caller to handle termination.
+    """
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.formatted_text import HTML
+        session = PromptSession()
+        prompt_html = HTML('<ansiblue>You</ansiblue> ')
+        return session.prompt(prompt_html)
+    except Exception:
+        try:
+            import console_ui as ui
+            return ui.console.input("\n[bold blue]You[/bold blue] ")
+        except Exception:
+            # last fallback to builtin input; let EOFError bubble up
+            return input("\n> ")
+
+
 def _interactive_loop(fuse_client_local):
     while True:
         try:
-            user_query = input("\n> ")
+            user_query = _get_user_input()
         except EOFError:
             print("\nGoodbye!")
             break
+        except KeyboardInterrupt:
+            # User pressed Ctrl-C; continue the loop to allow graceful exit
+            print("\nInterrupted. Goodbye!")
+            continue
         if user_query.strip().lower() in {"exit", "quit"}:
             if fuse_client_local is not None and not FLUSH_PER_QUERY:
                 try:
@@ -206,4 +236,3 @@ def _interactive_loop(fuse_client_local):
             # No Langfuse client or observation support; just run the query
             result = run_query(user_query)
             _print_result(result)
-

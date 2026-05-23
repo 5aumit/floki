@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 # mlflow is optional for unit tests in minimal environments
 try:
+    logging.getLogger("mlflow").setLevel(logging.WARNING)
     import mlflow
     from mlflow.tracking import MlflowClient
     from mlflow.exceptions import MlflowException
@@ -32,7 +33,7 @@ from . import schemas
 
 # Keep MLflow logs quieter by default
 # os.environ.setdefault("MLFLOW_LOGGING_LEVEL", "WARNING")
-logging.getLogger("mlflow").setLevel(logging.WARNING)
+# logging.getLogger("mlflow").setLevel(logging.WARNING)
 
 # Load mlruns_dir from global config
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config.json'))
@@ -166,7 +167,9 @@ def raw_find_best_runs_by_metric(
 ) -> List[Dict[str, Any]]:
     """Return top-k runs ordered by metric (max or min)."""
 
-    if experiment_ids.lower() in ["all","*"]:
+    if isinstance(experiment_ids, str):
+        experiment_ids = [experiment_ids]
+    if experiment_ids and isinstance(experiment_ids, list) and isinstance(experiment_ids[0], str) and experiment_ids[0].lower() in ["all","*"]:
         raise ValueError("To search across all experiments, use a list of all experiment IDs obtained from list_experiments.")
     order = f"metrics.{metric} DESC" if mode == 'max' else f"metrics.{metric} ASC"
     try:
