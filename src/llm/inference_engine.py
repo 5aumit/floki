@@ -1,68 +1,32 @@
-from abc import ABC, abstractmethod
+import os
 
-from langchain_groq import ChatGroq
-from langchain_core.tools import Tool as LangChainTool
-from typing import List
-
-class InferenceEngine(ABC):
-    @abstractmethod
-    def generate_response(self, prompt: str) -> str:
-        """Generate a response from the inference provider given a prompt."""
-        pass
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 
+def _get_gemini_api_key(llm_config: dict) -> str:
+    api_key = llm_config.get("gemini_api_key") or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("Missing GEMINI_API_KEY for Gemini provider.")
+    return api_key
 
-class GroqEngine(InferenceEngine):
-    def __init__(self, api_key: str, model: str = "moonshotai/kimi-k2-instruct", **kwargs):
-        self.api_key = api_key
-        self.model = model
-        self.generation_kwargs = kwargs
-        self.llm = ChatGroq(
-            groq_api_key=self.api_key,
-            model_name=self.model,
-            **self.generation_kwargs
-        )
 
-    def generate_response(self, prompt: str, model: str = None, **kwargs) -> str:
-        return self.llm.invoke(prompt)
-
-    def bind_tools(self, tools: List[LangChainTool]):
-        return self.llm.bind_tools(tools)
-
-class OpenAIEngine(InferenceEngine):
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        # Placeholder for OpenAI client initialization
-        pass
-
-    def generate_response(self, prompt: str) -> str:
-        # TODO: Implement OpenAI API call
-        raise NotImplementedError("OpenAI integration not implemented yet.")
-
-class OllamaEngine(InferenceEngine):
-    def __init__(self, base_url: str = "http://localhost:11434"):
-        self.base_url = base_url
-        # Placeholder for Ollama client initialization
-        pass
-
-    def generate_response(self, prompt: str) -> str:
-        # TODO: Implement Ollama API call
-        raise NotImplementedError("Ollama integration not implemented yet.")
-
-# Add config-driven LLM engine selection utility
 def get_llm_from_config(llm_config: dict):
-    provider = llm_config.get('provider', 'groq')
-    if provider == 'groq':
-        return GroqEngine(
-            api_key=llm_config.get('groq_api_key'),
-            model=llm_config.get('groq_model', 'moonshotai/kimi-k2-instruct'),
-            **llm_config.get('groq_params', {})
-        ).llm
-    elif provider == 'openai':
-        # Placeholder for OpenAIEngine
-        raise NotImplementedError("OpenAIEngine config not implemented yet.")
-    elif provider == 'ollama':
-        # Placeholder for OllamaEngine
-        raise NotImplementedError("OllamaEngine config not implemented yet.")
-    else:
-        raise ValueError(f"Unsupported LLM provider: {provider}")
+    provider = llm_config.get("provider", "gemini")
+    if provider != "gemini":
+        raise ValueError(f"Unsupported LLM provider: {provider}. Only 'gemini' is supported.")
+    return ChatGoogleGenerativeAI(
+        google_api_key=_get_gemini_api_key(llm_config),
+        model=llm_config.get("gemini_model", "gemini-2.5-flash"),
+        **llm_config.get("gemini_params", {}),
+    )
+
+
+def get_formatter_llm_from_config(llm_config: dict):
+    provider = llm_config.get("provider", "gemini")
+    if provider != "gemini":
+        raise ValueError(f"Unsupported LLM provider: {provider}. Only 'gemini' is supported.")
+    return ChatGoogleGenerativeAI(
+        google_api_key=_get_gemini_api_key(llm_config),
+        model=llm_config.get("formatter_model", "gemini-2.5-flash-lite"),
+        **llm_config.get("formatter_params", {}),
+    )

@@ -8,6 +8,11 @@ Floki is named after the legendary Viking engineer Flóki Vilgerðarson, who bui
 
 A CLI-based assistant for ML experimentation, inspired by Claude Code, that helps researchers query, analyze, and gain insights from MLflow experiment logs.
 
+**Demo**
+> The following GIF is sped up to focus on the demo and move past the MLfLow Client load time.  
+
+![image](assets/floki-demo.gif)
+
 **Quick Setup**
 
 1) Create and activate an environment
@@ -32,11 +37,18 @@ pip install -r requirements.txt
 Create a `.env` file in the project root or export the variables into your shell. The agent expects at least the following keys:
 
 ```
-GROQ_API_KEY=your_groq_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 LANGFUSE_PUBLIC_KEY=your_langfuse_api_key_here
 LANGFUSE_SECRET_KEY=your_langfuse_api_key_here
 LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"
 ```
+
+Model configuration lives in `config.json` under `llm`:
+
+- `gemini_model` — agent LLM for tool calling (default: `gemini-2.5-flash`)
+- `formatter_model` — formatter LLM for structured UI output (default: `gemini-2.5-flash-lite`)
+
+The agent runs in two phases: first it calls MLflow tools and drafts an answer, then the formatter produces a structured `BlockResponse` for rendering.
 
 3) Run the agent or scripts
 

@@ -40,3 +40,6 @@ config.json
 .agents/
 skills-lock.json
 tests/
+
+# VHS Stuff
+vhs/*
