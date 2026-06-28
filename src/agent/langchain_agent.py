@@ -10,12 +10,17 @@ import os
 import json
 import sys
 import time
+import uuid
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from llm.inference_engine import get_llm_from_config, get_formatter_llm_from_config
 from mlflow_tools import data_access
 from llm.tracing import setup_langfuse, propagate_attributes
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.messages import RemoveMessage
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
+
 from agent.agent_middleware import handle_tool_errors
+from agent.context_memory import trim_messages_for_memory
 from agent.response_formatter import format_to_block_response
 
 
@@ -47,6 +52,7 @@ llm = get_llm_from_config(llm_config)
 formatter_llm = get_formatter_llm_from_config(llm_config)
 
 langfuse_handler, fuse_client, conversation_id, lf_run, langfuse_user, FLUSH_PER_QUERY = setup_langfuse(config)
+session_thread_id = conversation_id or f"session-{uuid.uuid4().hex[:8]}"
 
 mlflow_tools = data_access.get_all_tools()
 checkpointer = InMemorySaver()
@@ -69,32 +75,39 @@ agent = create_agent(
 
 
 def _build_invoke_config() -> dict:
-    config_kwargs = {}
+    config_kwargs = {
+        "configurable": {"thread_id": session_thread_id},
+    }
     if langfuse_handler is not None:
         logging.info("Attaching Langfuse handler to agent invocation.")
-        config_kwargs['callbacks'] = [langfuse_handler]
-        config_kwargs['configurable'] = {'thread_id': conversation_id or "default_thread"}
+        config_kwargs["callbacks"] = [langfuse_handler]
         if conversation_id is not None:
-            meta = config_kwargs.setdefault('metadata', {})
-            meta['conversation_id'] = conversation_id
+            meta = config_kwargs.setdefault("metadata", {})
+            meta["conversation_id"] = conversation_id
             if langfuse_user:
-                meta['user'] = langfuse_user
+                meta["user"] = langfuse_user
     return config_kwargs
+
+
+def _persist_trimmed_memory(agent_result: dict, invoke_config: dict) -> None:
+    trimmed = trim_messages_for_memory(agent_result["messages"])
+    agent.update_state(
+        invoke_config,
+        {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *trimmed]},
+    )
 
 
 def run_query(user_query: str) -> dict:
     messages = [{"role": "user", "content": user_query}]
-    config_kwargs = _build_invoke_config()
-    if config_kwargs:
-        agent_result = agent.invoke({"messages": messages}, config=config_kwargs)
-    else:
-        agent_result = agent.invoke({"messages": messages})
+    invoke_config = _build_invoke_config()
+    agent_result = agent.invoke({"messages": messages}, config=invoke_config)
 
     structured = format_to_block_response(
         formatter_llm,
         agent_result["messages"],
         user_query,
     )
+    _persist_trimmed_memory(agent_result, invoke_config)
     return {
         "structured_response": structured,
         "messages": agent_result["messages"],
@@ -129,13 +142,9 @@ def loading_animation(message, duration=3):
 
 def main():
     os.system('cls' if os.name == 'nt' else 'clear')
-    print("\n==============================")
-    print("  Welcome to MLflow Agent CLI  ")
-    print("==============================")
     print("Initializing agent and loading tools...")
     loading_animation("Starting up, please wait...", duration=3)
 
-    print("Agent is ready! Type 'exit' to quit.")
     try:
         import console_ui as ui
         ui.print_welcome()
