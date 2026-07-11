@@ -9,19 +9,27 @@ Floki is named after the legendary Viking engineer Flóki Vilgerðarson, who bui
 A CLI-based assistant for ML experimentation, inspired by Claude Code, that helps researchers query, analyze, and gain insights from MLflow experiment logs.
 
 **Demo**
-> The following GIF is sped up to focus on the demo and move past the MLfLow Client load time.  
+> The following GIF is sped up to focus on the demo and move past the MLfLow Client load time.
 
 ![image](assets/floki-demo.gif)
 
-**Quick Setup**
+## Quick Setup
 
-1) Create and activate an environment
+### 1) Create and activate an environment
 
 Option A — Conda (recommended):
 
 ```bash
-conda env create -f environment.yml -n floki-agent
-conda activate floki-agent
+bash setup_env.sh
+conda activate ./mlflow_agentic_env
+```
+
+Or create manually:
+
+```bash
+conda env create -f environment.yml -p ./mlflow_agentic_env
+conda activate ./mlflow_agentic_env
+pip install -r requirements.txt
 ```
 
 Option B — venv + pip:
@@ -32,7 +40,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2) Add required API keys
+### 2) Add required API keys
 
 Create a `.env` file in the project root or export the variables into your shell. The agent expects at least the following keys:
 
@@ -50,11 +58,24 @@ Model configuration lives in `config.json` under `llm`:
 
 The agent runs in two phases: first it calls MLflow tools and drafts an answer, then the formatter produces a structured `BlockResponse` for rendering.
 
-3) Run the agent or scripts
+### 3) Run the agent
 
-Start the main agent (project includes `run_agent.sh`):
+From the project root:
 
 ```bash
 bash run_agent.sh
 ```
 
+Or directly:
+
+```bash
+python src/app.py --tui
+```
+
+Legacy Rich REPL:
+
+```bash
+python src/app.py --repl
+```
+
+Type your question and press Enter. Type `exit` or `quit` to leave.

@@ -1,0 +1,75 @@
+Screen {
+    layout: vertical;
+}
+
+#chat-view {
+    height: 1fr;
+    scrollbar-gutter: stable;
+}
+
+#query-input {
+    dock: bottom;
+    margin: 0 1 1 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    background: $surface;
+    color: $text-muted;
+}
+
+#tool-trace {
+    display: none;
+    height: auto;
+    max-height: 8;
+    margin: 0 1;
+    border: solid $primary-darken-2;
+}
+
+#tool-trace.visible {
+    display: block;
+}
+
+QueryLoading {
+    margin: 1 8 1 1;
+    height: 1;
+}
+
+UserPrompt {
+    background: $primary 10%;
+    color: $text;
+    margin: 1 1 1 8;
+    padding: 1 2;
+    width: 100%;
+    height: auto;
+}
+
+AssistantResponse {
+    border: wide $success;
+    background: $success 10%;
+    margin: 1 8 1 1;
+    padding: 0 1 1 1;
+    width: 100%;
+    height: auto;
+}
+
+WelcomePanel {
+    width: 100%;
+    height: auto;
+    border: wide $primary;
+    padding: 1 2;
+    margin: 1 2;
+    content-align: center middle;
+}
+
+FlokiLabel {
+    background: darkgreen;
+    color: white;
+    text-style: bold;
+    width: auto;
+    height: 1;
+    padding: 0 1;
+    margin: 1 0 0 1;
+}
