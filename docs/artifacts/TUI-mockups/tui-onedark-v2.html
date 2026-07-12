@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Floki TUI — One Dark v2 (approved direction)</title>
+  <style>
+    :root {
+      --od-bg: #282c34;
+      --od-bg-deep: #21252b;
+      --od-bg-elev: #2c313a;
+      --od-fg: #abb2bf;
+      --od-muted: #5c6370;
+      --od-gutter: #4b5263;
+      --od-border: #3e4451;
+      --od-red: #e06c75;
+      --od-orange: #d19a66;
+      --od-yellow: #e5c07b;
+      --od-green: #98c379;
+      --od-cyan: #56b6c2;
+      --od-blue: #61afef;
+      --od-purple: #c678dd;
+      --page-bg: #1a1d23;
+      --font: "Cascadia Mono", "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace;
+
+      /* Softened banner: same magenta→blue arc, pulled toward One Dark purple/blue */
+      --ban-1: #c678dd;
+      --ban-2: #b87cdb;
+      --ban-3: #aa80d8;
+      --ban-4: #9c88d4;
+      --ban-5: #8e90d0;
+      --ban-6: #8098cc;
+      --ban-7: #70a0c8;
+      --ban-8: #61afef;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--page-bg);
+      color: var(--od-fg);
+      line-height: 1.5;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .wrap { max-width: 980px; margin: 0 auto; }
+
+    header h1 {
+      font-size: 1.25rem;
+      color: var(--od-yellow);
+      font-weight: 600;
+    }
+
+    header .lede {
+      margin-top: 0.55rem;
+      color: var(--od-muted);
+      font-size: 0.82rem;
+      max-width: 72ch;
+    }
+
+    header .lede code {
+      color: var(--od-cyan);
+      background: var(--od-bg);
+      padding: 0.05em 0.35em;
+      border-radius: 3px;
+    }
+
+    header .decisions {
+      margin: 1rem 0 0;
+      padding: 0.75rem 1rem;
+      background: var(--od-bg-deep);
+      border: 1px solid var(--od-border);
+      border-left: 3px solid var(--od-green);
+      font-size: 0.78rem;
+      color: var(--od-fg);
+    }
+
+    header .decisions li { margin: 0.2rem 0 0.2rem 1.1rem; }
+    header .decisions strong { color: var(--od-green); }
+
+    /* ── sections ───────────────────────────────────────────── */
+    section.block {
+      margin-top: 2rem;
+      border: 1px solid var(--od-border);
+      background: var(--od-bg-deep);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    section.block > h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #d7dae0;
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--od-border);
+      background: #1e2229;
+    }
+
+    section.block > .body { padding: 1rem; }
+
+    /* verb table */
+    .verb-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    .verb-table th {
+      text-align: left;
+      color: var(--od-purple);
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid var(--od-border);
+      font-weight: 600;
+    }
+
+    .verb-table td {
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid color-mix(in srgb, var(--od-border) 55%, transparent);
+      vertical-align: top;
+    }
+
+    .verb-table tr:last-child td { border-bottom: none; }
+    .verb-table code { color: var(--od-cyan); }
+    .verb-table .verb {
+      color: var(--od-yellow);
+      font-weight: 700;
+    }
+    .verb-table .fallback { color: var(--od-muted); font-style: italic; }
+
+    .note {
+      margin-top: 0.85rem;
+      font-size: 0.75rem;
+      color: var(--od-muted);
+    }
+
+    .note code { color: var(--od-cyan); }
+
+    /* banner compare */
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 720px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+
+    .compare .card {
+      background: var(--od-bg);
+      border: 1px solid var(--od-border);
+      padding: 0.85rem 1rem;
+      text-align: center;
+    }
+
+    .compare .card h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--od-muted);
+      margin-bottom: 0.65rem;
+    }
+
+    .ascii {
+      display: inline-block;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.05;
+      white-space: pre;
+      margin: 0 auto;
+    }
+
+    .ascii.vivid .l1 { color: #dd22ff; }
+    .ascii.vivid .l2 { color: #cc22ff; }
+    .ascii.vivid .l3 { color: #bb22ff; }
+    .ascii.vivid .l4 { color: #9922ff; }
+    .ascii.vivid .l5 { color: #7722ff; }
+    .ascii.vivid .l6 { color: #5533ff; }
+    .ascii.vivid .l7 { color: #3355ff; }
+    .ascii.vivid .l8 { color: #2266ff; }
+
+    .ascii.soft .l1 { color: var(--ban-1); }
+    .ascii.soft .l2 { color: var(--ban-2); }
+    .ascii.soft .l3 { color: var(--ban-3); }
+    .ascii.soft .l4 { color: var(--ban-4); }
+    .ascii.soft .l5 { color: var(--ban-5); }
+    .ascii.soft .l6 { color: var(--ban-6); }
+    .ascii.soft .l7 { color: var(--ban-7); }
+    .ascii.soft .l8 { color: var(--ban-8); }
+
+    .swatches {
+      display: flex;
+      gap: 3px;
+      justify-content: center;
+      margin-top: 0.65rem;
+    }
+
+    .swatches i {
+      width: 14px; height: 14px;
+      border-radius: 2px;
+      border: 1px solid var(--od-border);
+    }
+
+    /* ── full TUI mock ──────────────────────────────────────── */
+    .term {
+      background: var(--od-bg);
+      color: var(--od-fg);
+      font-size: 13px;
+      min-height: 560px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--od-border);
+    }
+
+    .term-chrome {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      background: var(--od-bg-deep);
+      border-bottom: 1px solid var(--od-border);
+      font-size: 0.7rem;
+      color: var(--od-muted);
+    }
+
+    .term-chrome .dots { display: flex; gap: 5px; }
+    .term-chrome .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      opacity: 0.7;
+    }
+    .term-chrome .dot:nth-child(1) { background: var(--od-red); }
+    .term-chrome .dot:nth-child(2) { background: var(--od-yellow); }
+    .term-chrome .dot:nth-child(3) { background: var(--od-green); }
+
+    .chat {
+      flex: 1;
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      overflow: hidden;
+    }
+
+    .welcome {
+      border: 3px double var(--od-blue);
+      padding: 1rem 1.25rem;
+      text-align: center;
+      animation: fadeSlide 0.55s ease both;
+    }
+
+    .welcome .ascii { font-size: 11px; margin-bottom: 0.65rem; }
+
+    .welcome .badge {
+      display: inline-block;
+      background: #006400;
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.15rem 0.55rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .welcome .hint { color: var(--od-cyan); font-size: 0.8rem; }
+    .welcome .sub { color: var(--od-muted); font-size: 0.72rem; margin-top: 0.25rem; }
+
+    .msg {
+      max-width: 88%;
+      padding: 0.65rem 0.9rem;
+      animation: fadeSlide 0.4s ease both;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: color-mix(in srgb, var(--od-blue) 12%, var(--od-bg));
+      border: 1px solid color-mix(in srgb, var(--od-blue) 35%, var(--od-border));
+    }
+
+    .msg.user .who {
+      color: var(--od-blue);
+      font-weight: 700;
+      font-size: 0.72rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .msg.assist {
+      align-self: flex-start;
+      background: color-mix(in srgb, var(--od-green) 10%, var(--od-bg));
+      border: 1px solid color-mix(in srgb, var(--od-green) 45%, var(--od-border));
+    }
+
+    .msg.assist .who {
+      display: inline-block;
+      background: var(--od-green);
+      color: #1e2229;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 0.05rem 0.4rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .msg .body { font-size: 0.82rem; }
+    .msg .body strong { color: var(--od-yellow); font-weight: 600; }
+    .msg .body .metric { color: var(--od-cyan); }
+    .msg .body .ok { color: var(--od-green); }
+
+    .table-block {
+      margin-top: 0.5rem;
+      border: 1px solid var(--od-border);
+      background: var(--od-bg-deep);
+      font-size: 0.72rem;
+    }
+
+    .table-block table { width: 100%; border-collapse: collapse; }
+    .table-block th {
+      text-align: left;
+      color: var(--od-purple);
+      padding: 0.3rem 0.55rem;
+      border-bottom: 1px solid var(--od-border);
+    }
+    .table-block td {
+      padding: 0.28rem 0.55rem;
+      border-bottom: 1px solid color-mix(in srgb, var(--od-border) 60%, transparent);
+    }
+    .table-block tr:last-child td { border-bottom: none; }
+    .table-block td.num { color: var(--od-cyan); font-variant-numeric: tabular-nums; }
+
+    /* status verb row */
+    .thinking {
+      align-self: flex-start;
+      color: var(--od-muted);
+      font-size: 0.78rem;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.2rem 0;
+      min-height: 1.4em;
+    }
+
+    .thinking .pulse { display: inline-flex; gap: 3px; }
+    .thinking .pulse i {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: var(--od-blue);
+      animation: bounce 1.1s ease-in-out infinite;
+      opacity: 0.85;
+    }
+    .thinking .pulse i:nth-child(2) { animation-delay: 0.15s; }
+    .thinking .pulse i:nth-child(3) { animation-delay: 0.3s; }
+
+    .thinking .verb-label {
+      color: var(--od-blue);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .thinking .verb-label.swap {
+      animation: verbSwap 0.28s ease;
+    }
+
+    .thinking .tool-hint {
+      color: var(--od-muted);
+      font-size: 0.7rem;
+    }
+
+    .thinking.done { display: none; }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0.75rem 0.55rem;
+      padding: 0.45rem 0.65rem;
+      background: var(--od-bg-elev);
+      border: 1px solid var(--od-gutter);
+    }
+
+    .input-row .prompt { color: var(--od-blue); font-weight: 700; }
+    .input-row .field { flex: 1; color: var(--od-fg); opacity: 0.55; }
+    .input-row .caret {
+      display: inline-block;
+      width: 7px; height: 1em;
+      background: var(--od-blue);
+      animation: blink 1s step-end infinite;
+      vertical-align: -2px;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.28rem 0.85rem;
+      background: var(--od-bg-deep);
+      border-top: 1px solid var(--od-border);
+      font-size: 0.68rem;
+      color: var(--od-muted);
+    }
+
+    .status .live { color: var(--od-green); }
+    .status .live::before {
+      content: "";
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--od-green);
+      margin-right: 0.35rem;
+      box-shadow: 0 0 6px color-mix(in srgb, var(--od-green) 70%, transparent);
+      animation: glowPulse 2.2s ease-in-out infinite;
+    }
+
+    .status.busy .live { color: var(--od-yellow); }
+    .status.busy .live::before {
+      background: var(--od-yellow);
+      box-shadow: 0 0 6px color-mix(in srgb, var(--od-yellow) 70%, transparent);
+    }
+
+    /* demo controls */
+    .demo-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.85rem;
+      font-size: 0.75rem;
+      color: var(--od-muted);
+    }
+
+    .demo-bar button {
+      font-family: inherit;
+      font-size: 0.75rem;
+      background: var(--od-bg);
+      color: var(--od-fg);
+      border: 1px solid var(--od-border);
+      padding: 0.35rem 0.7rem;
+      cursor: pointer;
+    }
+
+    .demo-bar button:hover {
+      border-color: var(--od-blue);
+      color: var(--od-blue);
+    }
+
+    .demo-bar button.primary {
+      border-color: var(--od-green);
+      color: var(--od-green);
+    }
+
+    .timeline {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      border: 1px solid var(--od-border);
+      background: #1e2229;
+    }
+
+    .timeline h3 {
+      font-size: 0.72rem;
+      color: var(--od-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--od-border);
+    }
+
+    .timeline ol {
+      list-style: none;
+      padding: 0.4rem 0;
+    }
+
+    .timeline li {
+      display: grid;
+      grid-template-columns: 4.5rem 7rem 1fr;
+      gap: 0.75rem;
+      padding: 0.35rem 0.75rem;
+      color: var(--od-muted);
+      border-left: 2px solid transparent;
+    }
+
+    .timeline li.active {
+      color: var(--od-fg);
+      background: color-mix(in srgb, var(--od-blue) 8%, transparent);
+      border-left-color: var(--od-blue);
+    }
+
+    .timeline li.done {
+      color: var(--od-muted);
+      border-left-color: var(--od-green);
+    }
+
+    .timeline .t { color: var(--od-cyan); font-variant-numeric: tabular-nums; }
+    .timeline .v { color: var(--od-yellow); font-weight: 700; }
+    .timeline li.done .v { color: var(--od-green); }
+
+    .comment {
+      margin-top: 1.5rem;
+      padding: 0.85rem 1rem;
+      background: #1e2229;
+      border: 1px solid var(--od-border);
+    }
+
+    .comment label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--od-yellow);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.4rem;
+    }
+
+    .comment textarea {
+      width: 100%;
+      min-height: 80px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 0.8rem;
+      color: var(--od-fg);
+      background: var(--od-bg);
+      border: 1px solid var(--od-border);
+      padding: 0.55rem 0.7rem;
+    }
+
+    .comment textarea:focus {
+      outline: none;
+      border-color: var(--od-blue);
+    }
+
+    .comment .hint {
+      margin-top: 0.35rem;
+      font-size: 0.68rem;
+      color: var(--od-muted);
+    }
+
+    footer {
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: var(--od-muted);
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-3px); opacity: 1; }
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    @keyframes glowPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    @keyframes verbSwap {
+      0%   { opacity: 0; transform: translateY(4px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat > :nth-child(1) { animation-delay: 0.05s; }
+    .chat > :nth-child(2) { animation-delay: 0.15s; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Floki TUI — One Dark v2</h1>
+      <p class="lede">
+        Approved direction from theme review: Classic One Dark layout/colors kept;
+        banner hexes softened toward <code>#c678dd</code>→<code>#61afef</code>;
+        loading row becomes a tool-aware verb animation (fallback <code>thinking</code>).
+      </p>
+      <ul class="decisions">
+        <li><strong>Keep:</strong> One Dark palette, bubble layout, status bar, table output, pulse dots</li>
+        <li><strong>Change:</strong> soften ASCII banner colors (too vivid before)</li>
+        <li><strong>Add:</strong> per-tool verb in the loading animation; update on each new tool call; default <code>thinking</code></li>
+      </ul>
+    </header>
+
+    <!-- banner compare -->
+    <section class="block">
+      <h2>1 · Banner color soften</h2>
+      <div class="body">
+        <div class="compare">
+          <div class="card">
+            <h3>Before (production vivid)</h3>
+            <pre class="ascii vivid" aria-label="vivid banner"><span class="l1">   ▄████████  ▄█        ▄██████▄     ▄█   ▄█▄  ▄█  </span>
+<span class="l2">  ███    ███ ███       ███    ███   ███ ▄███▀ ███  </span>
+<span class="l3">  ███    █▀  ███       ███    ███   ███▐██▀   ███▌ </span>
+<span class="l4"> ▄███▄▄▄     ███       ███    ███  ▄█████▀    ███▌ </span>
+<span class="l5">▀▀███▀▀▀     ███       ███    ███ ▀▀█████▄    ███▌ </span>
+<span class="l6">  ███        ███       ███    ███   ███▐██▄   ███  </span>
+<span class="l7">  ███        ███▌    ▄ ███    ███   ███ ▀███▄ ███  </span>
+<span class="l8">  ███        █████▄▄██  ▀██████▀    ███   ▀█▀ █▀   </span></pre>
+            <div class="swatches">
+              <i style="background:#dd22ff"></i>
+              <i style="background:#cc22ff"></i>
+              <i style="background:#bb22ff"></i>
+              <i style="background:#9922ff"></i>
+              <i style="background:#7722ff"></i>
+              <i style="background:#5533ff"></i>
+              <i style="background:#3355ff"></i>
+              <i style="background:#2266ff"></i>
+            </div>
+          </div>
+          <div class="card">
+            <h3>After (softened — ship this)</h3>
+            <pre class="ascii soft" aria-label="soft banner"><span class="l1">   ▄████████  ▄█        ▄██████▄     ▄█   ▄█▄  ▄█  </span>
+<span class="l2">  ███    ███ ███       ███    ███   ███ ▄███▀ ███  </span>
+<span class="l3">  ███    █▀  ███       ███    ███   ███▐██▀   ███▌ </span>
+<span class="l4"> ▄███▄▄▄     ███       ███    ███  ▄█████▀    ███▌ </span>
+<span class="l5">▀▀███▀▀▀     ███       ███    ███ ▀▀█████▄    ███▌ </span>
+<span class="l6">  ███        ███       ███    ███   ███▐██▄   ███  </span>
+<span class="l7">  ███        ███▌    ▄ ███    ███   ███ ▀███▄ ███  </span>
+<span class="l8">  ███        █████▄▄██  ▀██████▀    ███   ▀█▀ █▀   </span></pre>
+            <div class="swatches">
+              <i style="background:#c678dd"></i>
+              <i style="background:#b87cdb"></i>
+              <i style="background:#aa80d8"></i>
+              <i style="background:#9c88d4"></i>
+              <i style="background:#8e90d0"></i>
+              <i style="background:#8098cc"></i>
+              <i style="background:#70a0c8"></i>
+              <i style="background:#61afef"></i>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          Same glyphs as <code>_BANNER_LINES</code>. Soft hexes belong in <code>_BANNER_COLORS</code>
+          (or a TUI-local override). Arc still magenta→blue, just One Dark–native saturation.
+        </p>
+      </div>
+    </section>
+
+    <!-- verb map -->
+    <section class="block">
+      <h2>2 · Tool → verb map</h2>
+      <div class="body">
+        <table class="verb-table">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Verb shown</th>
+              <th>Rationale</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>list_experiments_tool</code></td>
+              <td class="verb">listing</td>
+              <td>Browsing experiment catalog</td>
+            </tr>
+            <tr>
+              <td><code>list_runs_tool</code></td>
+              <td class="verb">scanning</td>
+              <td>Walking runs in an experiment</td>
+            </tr>
+            <tr>
+              <td><code>count_runs_per_experiment_tool</code></td>
+              <td class="verb">counting</td>
+              <td>Aggregate run counts</td>
+            </tr>
+            <tr>
+              <td><code>get_run_metrics_tool</code></td>
+              <td class="verb">fetching</td>
+              <td>Pulling metric values</td>
+            </tr>
+            <tr>
+              <td><code>get_run_params_tool</code></td>
+              <td class="verb">inspecting</td>
+              <td>Reading run params</td>
+            </tr>
+            <tr>
+              <td><code>find_best_runs_by_metric_tool</code></td>
+              <td class="verb">ranking</td>
+              <td>Top-k by metric</td>
+            </tr>
+            <tr>
+              <td><code>check_experiment_generalization_tool</code></td>
+              <td class="verb">checking</td>
+              <td>Train/test generalization check</td>
+            </tr>
+            <tr>
+              <td class="fallback">unknown / no tool / agent-only turn</td>
+              <td class="verb">thinking</td>
+              <td>Default fallback</td>
+            </tr>
+            <tr>
+              <td class="fallback">formatter phase (optional)</td>
+              <td class="verb">formatting</td>
+              <td>After tools finish, while BlockResponse builds</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="note">
+          Behavior: start at <code>thinking</code> → on each tool call replace the verb in place
+          (keep the pulse) → when a later tool fires, swap again → unknown tool name → <code>thinking</code>.
+          Dim tool name optional (shown in demo for clarity; can hide in ship).
+        </p>
+      </div>
+    </section>
+
+    <!-- interactive full mock -->
+    <section class="block">
+      <h2>3 · Full mock + live verb animation</h2>
+      <div class="body">
+        <div class="demo-bar">
+          <button type="button" class="primary" id="btn-play">▶ Play query sequence</button>
+          <button type="button" id="btn-reset">Reset</button>
+          <span id="demo-state">Idle — press play to simulate tool calls</span>
+        </div>
+
+        <div class="term" id="term">
+          <div class="term-chrome">
+            <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <span>floki — one dark v2</span>
+          </div>
+
+          <div class="chat">
+            <div class="welcome">
+              <pre class="ascii soft" aria-label="FLOKI banner"><span class="l1">   ▄████████  ▄█        ▄██████▄     ▄█   ▄█▄  ▄█  </span>
+<span class="l2">  ███    ███ ███       ███    ███   ███ ▄███▀ ███  </span>
+<span class="l3">  ███    █▀  ███       ███    ███   ███▐██▀   ███▌ </span>
+<span class="l4"> ▄███▄▄▄     ███       ███    ███  ▄█████▀    ███▌ </span>
+<span class="l5">▀▀███▀▀▀     ███       ███    ███ ▀▀█████▄    ███▌ </span>
+<span class="l6">  ███        ███       ███    ███   ███▐██▄   ███  </span>
+<span class="l7">  ███        ███▌    ▄ ███    ███   ███ ▀███▄ ███  </span>
+<span class="l8">  ███        █████▄▄██  ▀██████▀    ███   ▀█▀ █▀   </span></pre>
+              <div class="badge">Floki v0.1 🧭</div>
+              <div class="hint">Welcome! Type your question and press Enter. Type 'exit' to quit.</div>
+              <div class="sub">Tool outputs (tables/JSON) appear below the assistant message.</div>
+            </div>
+
+            <div class="msg user" id="user-msg" hidden>
+              <div class="who">You</div>
+              <div class="body">Compare best val_acc runs in cnn-v2 and show their learning rates</div>
+            </div>
+
+            <div class="thinking" id="thinking" hidden>
+              <span class="pulse"><i></i><i></i><i></i></span>
+              <span class="verb-label" id="verb-label">thinking</span>
+              <span class="tool-hint" id="tool-hint"></span>
+            </div>
+
+            <div class="msg assist" id="assist-msg" hidden>
+              <div class="who">Floki</div>
+              <div class="body">
+                Top <strong>val_acc</strong> in <span class="metric">cnn-v2</span>, with learning rates:
+                <div class="table-block">
+                  <table>
+                    <tr><th>run</th><th>val_acc</th><th>lr</th><th>status</th></tr>
+                    <tr><td>bold-fox-3</td><td class="num">0.941</td><td class="num">3e-4</td><td class="ok">FINISHED</td></tr>
+                    <tr><td>calm-owl-7</td><td class="num">0.928</td><td class="num">1e-3</td><td class="ok">FINISHED</td></tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="input-row">
+            <span class="prompt">›</span>
+            <span class="field">Ask about experiments…</span>
+            <span class="caret"></span>
+          </div>
+          <div class="status" id="status-bar">
+            <span><span class="live" id="status-live">Ready</span> · gemini-2.5-flash / fmt flash-lite</span>
+            <span>Langfuse on · sess-a1b2</span>
+          </div>
+        </div>
+
+        <div class="timeline">
+          <h3>Sequence timeline (what the demo plays)</h3>
+          <ol id="timeline">
+            <li data-step="0"><span class="t">t+0.0s</span><span class="v">thinking</span><span>query submitted — no tool yet</span></li>
+            <li data-step="1"><span class="t">t+0.8s</span><span class="v">listing</span><span><code>list_experiments_tool</code></span></li>
+            <li data-step="2"><span class="t">t+1.8s</span><span class="v">scanning</span><span><code>list_runs_tool</code></span></li>
+            <li data-step="3"><span class="t">t+2.8s</span><span class="v">ranking</span><span><code>find_best_runs_by_metric_tool</code></span></li>
+            <li data-step="4"><span class="t">t+3.8s</span><span class="v">inspecting</span><span><code>get_run_params_tool</code></span></li>
+            <li data-step="5"><span class="t">t+4.8s</span><span class="v">formatting</span><span>formatter builds BlockResponse</span></li>
+            <li data-step="6"><span class="t">t+5.6s</span><span class="v">—</span><span>response mounted; loading row removed</span></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <div class="comment">
+      <label for="c-v2">Comments on v2</label>
+      <textarea id="c-v2" placeholder="Verb names, banner softness, formatting phase, hide tool-hint, etc."></textarea>
+      <p class="hint">Autosaves in this browser (<code>floki-tui-onedark-v2</code>). Prefer pasting here in chat when ready — localStorage is not visible to the agent.</p>
+    </div>
+
+    <footer>
+      File: <code>docs/artifacts/TUI-mockups/tui-onedark-v2.html</code>
+      · Previous samples: <code>tui-theme-samples.html</code>
+    </footer>
+  </div>
+
+  <script>
+    // Tool name → verb. Unknown → "thinking".
+    const TOOL_VERBS = {
+      list_experiments_tool: "listing",
+      list_runs_tool: "scanning",
+      count_runs_per_experiment_tool: "counting",
+      get_run_metrics_tool: "fetching",
+      get_run_params_tool: "inspecting",
+      find_best_runs_by_metric_tool: "ranking",
+      check_experiment_generalization_tool: "checking",
+    };
+
+    function verbFor(toolName) {
+      if (!toolName) return "thinking";
+      return TOOL_VERBS[toolName] || "thinking";
+    }
+
+    const SEQUENCE = [
+      { at: 0,    verb: "thinking",   tool: null,                              status: "Agent running…" },
+      { at: 800,  verb: "listing",    tool: "list_experiments_tool",           status: "Agent running…" },
+      { at: 1800, verb: "scanning",   tool: "list_runs_tool",                  status: "Agent running…" },
+      { at: 2800, verb: "ranking",    tool: "find_best_runs_by_metric_tool",   status: "Agent running…" },
+      { at: 3800, verb: "inspecting", tool: "get_run_params_tool",             status: "Agent running…" },
+      { at: 4800, verb: "formatting", tool: null,                              status: "Formatting…" },
+      { at: 5600, verb: null,         tool: null,                              status: "Ready", done: true },
+    ];
+
+    const verbLabel = document.getElementById("verb-label");
+    const toolHint = document.getElementById("tool-hint");
+    const thinking = document.getElementById("thinking");
+    const userMsg = document.getElementById("user-msg");
+    const assistMsg = document.getElementById("assist-msg");
+    const statusBar = document.getElementById("status-bar");
+    const statusLive = document.getElementById("status-live");
+    const demoState = document.getElementById("demo-state");
+    const timeline = document.getElementById("timeline");
+    let timers = [];
+
+    function setVerb(verb, tool) {
+      verbLabel.classList.remove("swap");
+      // reflow so animation restarts
+      void verbLabel.offsetWidth;
+      verbLabel.textContent = verb;
+      verbLabel.classList.add("swap");
+      toolHint.textContent = tool ? `· ${tool}` : "";
+    }
+
+    function setTimeline(step) {
+      [...timeline.querySelectorAll("li")].forEach((li) => {
+        const s = Number(li.dataset.step);
+        li.classList.toggle("active", s === step);
+        li.classList.toggle("done", s < step);
+      });
+    }
+
+    function clearTimers() {
+      timers.forEach(clearTimeout);
+      timers = [];
+    }
+
+    function reset() {
+      clearTimers();
+      userMsg.hidden = true;
+      assistMsg.hidden = true;
+      thinking.hidden = true;
+      thinking.classList.remove("done");
+      setVerb("thinking", null);
+      statusBar.classList.remove("busy");
+      statusLive.textContent = "Ready";
+      demoState.textContent = "Idle — press play to simulate tool calls";
+      setTimeline(-1);
+    }
+
+    function play() {
+      reset();
+      userMsg.hidden = false;
+      thinking.hidden = false;
+      statusBar.classList.add("busy");
+      demoState.textContent = "Playing…";
+
+      SEQUENCE.forEach((step, idx) => {
+        timers.push(setTimeout(() => {
+          if (step.done) {
+            thinking.hidden = true;
+            assistMsg.hidden = false;
+            statusBar.classList.remove("busy");
+            statusLive.textContent = "Ready";
+            demoState.textContent = "Done";
+            setTimeline(idx);
+            return;
+          }
+          setVerb(step.verb, step.tool);
+          statusLive.textContent = step.status;
+          setTimeline(idx);
+          demoState.textContent = step.tool
+            ? `Tool: ${step.tool} → ${step.verb}`
+            : `Phase: ${step.verb}`;
+        }, step.at));
+      });
+    }
+
+    document.getElementById("btn-play").addEventListener("click", play);
+    document.getElementById("btn-reset").addEventListener("click", reset);
+
+    // Sanity: unknown tool falls back
+    console.assert(verbFor("nope_tool") === "thinking");
+    console.assert(verbFor("list_runs_tool") === "scanning");
+    console.assert(verbFor(null) === "thinking");
+
+    // comment autosave
+    const KEY = "floki-tui-onedark-v2";
+    const ta = document.getElementById("c-v2");
+    try {
+      const stored = JSON.parse(localStorage.getItem(KEY) || "{}");
+      if (stored.comment) ta.value = stored.comment;
+    } catch {}
+    ta.addEventListener("input", () => {
+      localStorage.setItem(KEY, JSON.stringify({ comment: ta.value }));
+    });
+  </script>
+</body>
+</html>

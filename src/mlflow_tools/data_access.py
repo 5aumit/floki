@@ -35,19 +35,41 @@ from . import schemas
 # os.environ.setdefault("MLFLOW_LOGGING_LEVEL", "WARNING")
 # logging.getLogger("mlflow").setLevel(logging.WARNING)
 
-# Load mlruns_dir from global config
-CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config.json'))
+# Load mlruns_dir from global config (resolve relative paths against project root)
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+CONFIG_PATH = os.path.join(_PROJECT_ROOT, "config.json")
+
+
+def _resolve_tracking_uri(uri: str) -> str:
+    """Make sqlite/file tracking URIs portable relative to the project root."""
+    if uri.startswith("sqlite:///"):
+        path = uri[len("sqlite:///"):]
+        if not path.startswith("/"):
+            path = os.path.abspath(os.path.join(_PROJECT_ROOT, path))
+            return f"sqlite:///{path}"
+        return uri
+    if "://" not in uri and not os.path.isabs(uri):
+        return os.path.abspath(os.path.join(_PROJECT_ROOT, uri))
+    return uri
+
+
 try:
-    with open(CONFIG_PATH, 'r') as f:
+    with open(CONFIG_PATH, "r") as f:
         _config = json.load(f)
-    mlruns_dir = _config.get('mlflow', {}).get('mlruns_dir', 'data/mlruns')
+    mlruns_dir = _resolve_tracking_uri(
+        _config.get("mlflow", {}).get("mlruns_dir", "data/mlruns")
+    )
 except Exception:
-    mlruns_dir = 'data/mlruns'
+    mlruns_dir = _resolve_tracking_uri("data/mlruns")
 
-print(f"Using mlruns directory: {mlruns_dir}")
+_logger = logging.getLogger(__name__)
+_logger.info("Using mlruns directory: %s", mlruns_dir)
 
-mlflow.set_tracking_uri(mlruns_dir)
-client = MlflowClient()
+if mlflow is not None:
+    mlflow.set_tracking_uri(mlruns_dir)
+    client = MlflowClient()
+else:
+    client = None
 
 
 def _iso_from_epoch_ms(ms: Optional[int]) -> Optional[str]:
