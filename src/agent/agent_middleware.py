@@ -1,7 +1,10 @@
+from typing import List, Literal, Union
+
 from langchain.agents.middleware import wrap_tool_call
 from langchain.messages import ToolMessage
 from pydantic import BaseModel, Field
-from typing import List, Literal, Union
+
+from agent.tool_status import emit_tool_status, tool_name_from_request
 
 
 class TextBlock(BaseModel):
@@ -21,6 +24,7 @@ class BlockResponse(BaseModel):
 @wrap_tool_call
 def handle_tool_errors(request, handler):
     """Handle tool execution errors with custom messages."""
+    emit_tool_status(tool_name_from_request(request))
     try:
         return handler(request)
     except Exception as e:

@@ -15,7 +15,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Iterator, Optional
+from typing import Any, Callable, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -37,6 +37,7 @@ from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from agent.agent_middleware import handle_tool_errors
 from agent.context_memory import trim_messages_for_memory
 from agent.response_formatter import format_to_block_response
+from agent.tool_status import FORMAT_VERB, DEFAULT_VERB, status_callback
 from llm.inference_engine import get_formatter_llm_from_config, get_llm_from_config
 from llm.tracing import propagate_attributes, setup_langfuse
 
@@ -151,17 +152,26 @@ def _persist_trimmed_memory(rt: AgentRuntime, agent_result: dict, invoke_config:
     )
 
 
-def run_query(user_query: str) -> dict:
+def run_query(
+    user_query: str,
+    on_status: Callable[[str], None] | None = None,
+) -> dict:
     rt = get_runtime()
     messages = [{"role": "user", "content": user_query}]
     invoke_config = _build_invoke_config(rt)
-    agent_result = rt.agent.invoke({"messages": messages}, config=invoke_config)
 
-    structured = format_to_block_response(
-        rt.formatter_llm,
-        agent_result["messages"],
-        user_query,
-    )
+    with status_callback(on_status):
+        if on_status is not None:
+            on_status(DEFAULT_VERB)
+        agent_result = rt.agent.invoke({"messages": messages}, config=invoke_config)
+        if on_status is not None:
+            on_status(FORMAT_VERB)
+        structured = format_to_block_response(
+            rt.formatter_llm,
+            agent_result["messages"],
+            user_query,
+        )
+
     _persist_trimmed_memory(rt, agent_result, invoke_config)
     return {
         "structured_response": structured,
@@ -185,26 +195,29 @@ def _extract_output_snippet(result: dict) -> Optional[str]:
             return None
 
 
-def run_query_traced(user_query: str) -> dict:
+def run_query_traced(
+    user_query: str,
+    on_status: Callable[[str], None] | None = None,
+) -> dict:
     """Run query with Langfuse span + session/user attributes (safe for worker threads)."""
     rt = get_runtime()
     fuse_client = rt.fuse_client
 
     def _with_span() -> dict:
         if fuse_client is None or not hasattr(fuse_client, "start_as_current_observation"):
-            return run_query(user_query)
+            return run_query(user_query, on_status=on_status)
         try:
             obs_cm = fuse_client.start_as_current_observation(as_type="span", name="langchain-call")
         except Exception:
             logging.exception("Failed to open Langfuse span; running untraced")
-            return run_query(user_query)
+            return run_query(user_query, on_status=on_status)
 
         with obs_cm as obs_ctx:
             try:
                 obs_ctx.update(input={"query": user_query})
             except Exception:
                 pass
-            result = run_query(user_query)
+            result = run_query(user_query, on_status=on_status)
             output_snippet = _extract_output_snippet(result)
             if output_snippet is not None:
                 try:

@@ -6,9 +6,11 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.markup import escape
+from textual.theme import Theme
 from textual.widgets import Input, Static
 from textual.worker import Worker, WorkerState
 
+from agent.tool_status import FORMAT_VERB
 from langchain_agent import (
     finish_langfuse,
     flush_langfuse_on_exit,
@@ -18,6 +20,22 @@ from langchain_agent import (
 from tui.blocks import render_result
 from tui.widgets.chat import AssistantResponse, QueryLoading, UserPrompt
 from tui.widgets.welcome import WelcomePanel
+
+# One Dark — matches docs/artifacts/TUI-mockups/tui-onedark-v2.html
+FLOKI_ONE_DARK = Theme(
+    name="floki-one-dark",
+    primary="#61afef",
+    secondary="#56b6c2",
+    accent="#c678dd",
+    foreground="#abb2bf",
+    background="#282c34",
+    success="#98c379",
+    warning="#e5c07b",
+    error="#e06c75",
+    surface="#21252b",
+    panel="#2c313a",
+    dark=True,
+)
 
 
 class FlokiApp(App):
@@ -48,6 +66,8 @@ class FlokiApp(App):
         yield Static("Initializing agent…", id="status-bar")
 
     def on_mount(self) -> None:
+        self.register_theme(FLOKI_ONE_DARK)
+        self.theme = "floki-one-dark"
         self._init_runtime()
 
     @work(thread=True)
@@ -63,7 +83,6 @@ class FlokiApp(App):
         self.query_one("#status-bar", Static).update(
             f"Init failed: {err}  (ctrl+q to quit)"
         )
-        # Keep input disabled; user can still quit via bindings.
 
     def _on_init_ready(self, rt: Any) -> None:
         llm = rt.config.get("llm", {}) or {}
@@ -78,6 +97,23 @@ class FlokiApp(App):
         inp.disabled = False
         self._agent_ready = True
         inp.focus()
+
+    def _set_status(self, text: str) -> None:
+        try:
+            self.query_one("#status-bar", Static).update(text)
+        except Exception:
+            pass
+
+    def _on_query_status(self, loading: QueryLoading, verb: str) -> None:
+        try:
+            if loading.is_mounted:
+                loading.set_verb(verb)
+        except Exception:
+            pass
+        if verb == FORMAT_VERB:
+            self._set_status("Formatting…")
+        else:
+            self._set_status("Agent running…")
 
     @on(Input.Submitted, "#query-input")
     def on_query_submitted(self, event: Input.Submitted) -> None:
@@ -97,17 +133,20 @@ class FlokiApp(App):
         response = AssistantResponse()
         chat.mount(loading)
         chat.mount(response)
-        chat.scroll_end(animate=False)
+        chat.scroll_end(animate=True)
 
         self._busy = True
         event.input.disabled = True
-        self.query_one("#status-bar", Static).update("Agent running…")
+        self._set_status("Agent running…")
         self._query_worker = self._run_query(text, response, loading)
 
     @work(thread=True, exclusive=True, group="query")
     def _run_query(self, query: str, response: AssistantResponse, loading: QueryLoading) -> None:
+        def on_status(verb: str) -> None:
+            self.call_from_thread(self._on_query_status, loading, verb)
+
         try:
-            result = run_query_traced(query)
+            result = run_query_traced(query, on_status=on_status)
             self.call_from_thread(self._on_query_done, response, loading, result, None)
         except Exception as exc:
             self.call_from_thread(self._on_query_done, response, loading, None, str(exc))
@@ -131,7 +170,7 @@ class FlokiApp(App):
                 response.mount(Static(f"[red]Error:[/red] {escape(err)}"))
             else:
                 render_result(response, result)
-            self.query_one("#chat-view", VerticalScroll).scroll_end(animate=False)
+            self.query_one("#chat-view", VerticalScroll).scroll_end(animate=True)
         except Exception:
             pass
 
@@ -141,7 +180,7 @@ class FlokiApp(App):
             inp = self.query_one("#query-input", Input)
             inp.disabled = False
             inp.focus()
-            self.query_one("#status-bar", Static).update("Ready")
+            self._set_status("Ready")
         except Exception:
             pass
 

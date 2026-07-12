@@ -1,15 +1,24 @@
 Screen {
     layout: vertical;
+    background: $background;
 }
 
 #chat-view {
     height: 1fr;
     scrollbar-gutter: stable;
+    background: $background;
 }
 
 #query-input {
     dock: bottom;
     margin: 0 1 1 1;
+    background: $panel;
+    border: solid $primary-darken-2;
+    color: $foreground;
+}
+
+#query-input:focus {
+    border: solid $primary;
 }
 
 #status-bar {
@@ -35,11 +44,13 @@ Screen {
 QueryLoading {
     margin: 1 8 1 1;
     height: 1;
+    color: $primary;
 }
 
 UserPrompt {
-    background: $primary 10%;
-    color: $text;
+    background: $primary 12%;
+    color: $foreground;
+    border: solid $primary 35%;
     margin: 1 1 1 8;
     padding: 1 2;
     width: 100%;
@@ -47,7 +58,7 @@ UserPrompt {
 }
 
 AssistantResponse {
-    border: wide $success;
+    border: solid $success 45%;
     background: $success 10%;
     margin: 1 8 1 1;
     padding: 0 1 1 1;
@@ -58,18 +69,24 @@ AssistantResponse {
 WelcomePanel {
     width: 100%;
     height: auto;
-    border: wide $primary;
+    border: double $primary;
     padding: 1 2;
     margin: 1 2;
     content-align: center middle;
+    background: $background;
 }
 
 FlokiLabel {
-    background: darkgreen;
-    color: white;
+    background: $success;
+    color: $background;
     text-style: bold;
     width: auto;
     height: 1;
     padding: 0 1;
     margin: 1 0 0 1;
+}
+
+Markdown {
+    margin: 0 1;
+    color: $foreground;
 }

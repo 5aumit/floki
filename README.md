@@ -9,7 +9,7 @@ Floki is named after the legendary Viking engineer Flóki Vilgerðarson, who bui
 A CLI-based assistant for ML experimentation, inspired by Claude Code, that helps researchers query, analyze, and gain insights from MLflow experiment logs.
 
 **Demo**
-> The following GIF is sped up to focus on the demo and move past the MLfLow Client load time.
+> One Dark TUI: welcome banner, tool-verb status animation, and structured answer blocks.
 
 ![image](assets/floki-demo.gif)
 
