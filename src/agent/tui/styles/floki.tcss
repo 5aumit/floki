@@ -1,0 +1,92 @@
+Screen {
+    layout: vertical;
+    background: $background;
+}
+
+#chat-view {
+    height: 1fr;
+    scrollbar-gutter: stable;
+    background: $background;
+}
+
+#query-input {
+    dock: bottom;
+    margin: 0 1 1 1;
+    background: $panel;
+    border: solid $primary-darken-2;
+    color: $foreground;
+}
+
+#query-input:focus {
+    border: solid $primary;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    background: $surface;
+    color: $text-muted;
+}
+
+#tool-trace {
+    display: none;
+    height: auto;
+    max-height: 8;
+    margin: 0 1;
+    border: solid $primary-darken-2;
+}
+
+#tool-trace.visible {
+    display: block;
+}
+
+QueryLoading {
+    margin: 1 8 1 1;
+    height: 1;
+    color: $primary;
+}
+
+UserPrompt {
+    background: $primary 12%;
+    color: $foreground;
+    border: solid $primary 35%;
+    margin: 1 1 1 8;
+    padding: 1 2;
+    width: 100%;
+    height: auto;
+}
+
+AssistantResponse {
+    border: solid $success 45%;
+    background: $success 10%;
+    margin: 1 8 1 1;
+    padding: 0 1 1 1;
+    width: 100%;
+    height: auto;
+}
+
+WelcomePanel {
+    width: 100%;
+    height: auto;
+    border: double $primary;
+    padding: 1 2;
+    margin: 1 2;
+    content-align: center middle;
+    background: $background;
+}
+
+FlokiLabel {
+    background: $success;
+    color: $background;
+    text-style: bold;
+    width: auto;
+    height: 1;
+    padding: 0 1;
+    margin: 1 0 0 1;
+}
+
+Markdown {
+    margin: 0 1;
+    color: $foreground;
+}
