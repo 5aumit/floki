@@ -33,13 +33,12 @@ src/notebooks/
 #Config files with sensitive info
 config.json
 
-#Other Stuff
+# Local tooling and secrets
 .vscode/
 .github/
 .env
 .agents/
 skills-lock.json
-tests/
 
 # VHS Stuff
 vhs/*

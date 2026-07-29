@@ -67,17 +67,26 @@ _logger.info("Using mlruns directory: %s", mlruns_dir)
 
 if mlflow is not None:
     mlflow.set_tracking_uri(mlruns_dir)
-    client = MlflowClient()
-else:
-    client = None
+client = None
+
+
+def _get_client() -> Any:
+    """Create the MLflow client only when a tool is first used."""
+    global client
+    if client is None:
+        if MlflowClient is None:
+            raise RuntimeError("MLflow is not installed. Install the project environment first.")
+        client = MlflowClient()
+    return client
 
 
 def _iso_from_epoch_ms(ms: Optional[int]) -> Optional[str]:
     if ms is None:
         return None
     try:
-        import datetime
-        return datetime.datetime.utcfromtimestamp(ms / 1000.0).isoformat() + 'Z'
+        from datetime import UTC, datetime
+
+        return datetime.fromtimestamp(ms / 1000.0, tz=UTC).isoformat().replace("+00:00", "Z")
     except Exception:
         return None
 
@@ -87,7 +96,7 @@ def _iso_from_epoch_ms(ms: Optional[int]) -> Optional[str]:
 def raw_list_experiments(include_deleted: bool = False, max_results: int = 100) -> List[Dict[str, Any]]:
     """List experiments with richer summary fields."""
     try:
-        exps = client.search_experiments()
+        exps = _get_client().search_experiments()
     except MlflowException as e:
         logging.error("Error listing experiments: %s", e)
         raise
@@ -123,7 +132,7 @@ def raw_list_runs(
     if experiment_id.lower() in ["all","*"]:
         raise ValueError("Listing runs across all experiments is not supported for token economy. Please specify a single experiment ID.")
     try:
-        runs = client.search_runs([experiment_id], order_by=[order_by] if order_by else None, max_results=max_results)
+        runs = _get_client().search_runs([experiment_id], order_by=[order_by] if order_by else None, max_results=max_results)
     except MlflowException as e:
         logging.error("Error listing runs: %s", e)
         raise
@@ -152,7 +161,7 @@ def raw_count_runs_per_experiment(experiment_ids: List[str]) -> Dict[str, int]:
     counts = {}
     for exp_id in experiment_ids:
         try:
-            runs = client.search_runs([exp_id], max_results=50000)
+            runs = _get_client().search_runs([exp_id], max_results=50000)
             counts[exp_id] = len(runs)
         except MlflowException as e:
             logging.error(f"Error counting runs for experiment {exp_id}: {e}")
@@ -163,7 +172,7 @@ def raw_count_runs_per_experiment(experiment_ids: List[str]) -> Dict[str, int]:
 def raw_get_run_metrics(run_id: str) -> Dict[str, float]:
     """Return a dict of metric_name -> latest_value for the run."""
     try:
-        run = client.get_run(run_id)
+        run = _get_client().get_run(run_id)
     except MlflowException as e:
         logging.error("Error getting run metrics for %s: %s", run_id, e)
         raise
@@ -173,7 +182,7 @@ def raw_get_run_metrics(run_id: str) -> Dict[str, float]:
 def raw_get_run_params(run_id: str) -> Dict[str, str]:
     """Return a dict of param_name -> value for the run."""
     try:
-        run = client.get_run(run_id)
+        run = _get_client().get_run(run_id)
     except MlflowException as e:
         logging.error("Error getting run params for %s: %s", run_id, e)
         raise
@@ -195,7 +204,7 @@ def raw_find_best_runs_by_metric(
         raise ValueError("To search across all experiments, use a list of all experiment IDs obtained from list_experiments.")
     order = f"metrics.{metric} DESC" if mode == 'max' else f"metrics.{metric} ASC"
     try:
-        runs = client.search_runs(experiment_ids, order_by=[order], max_results=top_k)
+        runs = _get_client().search_runs(experiment_ids, order_by=[order], max_results=top_k)
     except MlflowException as e:
         logging.error("Error searching runs for best metric %s: %s", metric, e)
         raise
@@ -225,7 +234,7 @@ def raw_check_experiment_generalization(
         exp = None
         # Try by id
         try:
-            e = client.get_experiment(experiment_id_or_name)
+            e = _get_client().get_experiment(experiment_id_or_name)
             if e:
                 exp = e
         except Exception:
@@ -233,7 +242,7 @@ def raw_check_experiment_generalization(
             pass
         if exp is None:
             # Try by name
-            exp = client.get_experiment_by_name(experiment_id_or_name)
+            exp = _get_client().get_experiment_by_name(experiment_id_or_name)
         if not exp:
             return {'passed': True, 'failing_runs': [], 'reason': 'experiment_not_found'}
     except MlflowException as e:

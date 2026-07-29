@@ -15,14 +15,12 @@ else
   conda env update -f environment.yml -p "$ENV_PATH" --prune
 fi
 
-echo "Installing pip requirements ..."
-"$ENV_PATH/bin/pip" install -r requirements.txt
-
-echo "Verifying TUI dependencies ..."
+echo "Verifying application and test dependencies ..."
 "$ENV_PATH/bin/python" -c "
-from textual import on, work
-import pydantic
-print('textual + pydantic OK')
+    from textual import on, work
+    import pydantic
+    import pytest
+    print('textual + pydantic + pytest OK')
 "
 
 echo "Done. Activate with:"

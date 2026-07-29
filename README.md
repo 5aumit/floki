@@ -15,37 +15,30 @@ A CLI-based assistant for ML experimentation, inspired by Claude Code, that help
 
 ## Quick Setup
 
-### 1) Create and activate an environment
-
-Option A — Conda (recommended):
+### 1) Create and activate the local environment
 
 ```bash
 bash setup_env.sh
 conda activate ./mlflow_agentic_env
 ```
 
-Or create manually:
-
-```bash
-conda env create -f environment.yml -p ./mlflow_agentic_env
-conda activate ./mlflow_agentic_env
-pip install -r requirements.txt
-```
-
-Option B — venv + pip:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+`setup_env.sh` is the supported setup path. It creates or updates a project-local
+Conda environment from `environment.yml` and verifies the TUI and test dependencies.
 
 ### 2) Add required API keys
 
-Create a `.env` file in the project root or export the variables into your shell. The agent expects at least the following keys:
+Copy the safe template, then adjust the MLflow location if needed:
+
+```bash
+cp config.example.json config.json
+```
+
+Create a `.env` file in the project root or export the variables into your shell.
+Only Gemini is required to run the agent. Langfuse variables are optional and enable tracing:
 
 ```
 GEMINI_API_KEY=your_gemini_api_key_here
+# Optional tracing
 LANGFUSE_PUBLIC_KEY=your_langfuse_api_key_here
 LANGFUSE_SECRET_KEY=your_langfuse_api_key_here
 LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"
@@ -57,6 +50,21 @@ Model configuration lives in `config.json` under `llm`:
 - `formatter_model` — formatter LLM for structured UI output (default: `gemini-2.5-flash-lite`)
 
 The agent runs in two phases: first it calls MLflow tools and drafts an answer, then the formatter produces a structured `BlockResponse` for rendering.
+
+### Sample MLflow data
+
+The repository includes a small SQLite MLflow database at `data/mlflow.db` for local
+exploration. The example configuration points to it. Start the MLflow UI with:
+
+```bash
+bash src/scripts/run_mlflow.sh
+```
+
+For your own tracking server, change `mlflow.mlruns_dir` in `config.json` to its
+MLflow tracking URI.
+
+The sample database includes run metadata and metrics. Its historical artifact files
+are not included; new local artifacts are stored under `data/artifacts/`.
 
 ### 3) Run the agent
 
@@ -79,3 +87,12 @@ python src/app.py --repl
 ```
 
 Type your question and press Enter. Type `exit` or `quit` to leave.
+
+## Development checks
+
+Run the automated checks from the activated environment:
+
+```bash
+pytest
+python -m compileall -q src
+```

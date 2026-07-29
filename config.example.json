@@ -1,0 +1,13 @@
+{
+  "llm": {
+    "provider": "gemini",
+    "gemini_model": "gemini-2.5-flash",
+    "formatter_model": "gemini-2.5-flash-lite"
+  },
+  "mlflow": {
+    "mlruns_dir": "sqlite:///data/mlflow.db"
+  },
+  "langfuse": {
+    "user": "local-user"
+  }
+}

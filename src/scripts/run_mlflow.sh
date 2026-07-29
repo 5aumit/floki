@@ -1,11 +1,13 @@
 #!/bin/bash
-# -------------------------------
-# start_mlflow_ui.sh
-# Starts MLflow UI for local experiments
-# -------------------------------
+# Start MLflow UI against Floki's bundled sample database.
+set -euo pipefail
 
-# Optional: set your tracking URI (if not default)
-# export MLFLOW_TRACKING_URI="sqlite:///mnt/d/DTSC/mlflow-analyzer/data/mlflow.db"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+DATABASE="$ROOT/data/mlflow.db"
 
-# Start the MLflow UI on port 5000
-mlflow ui --backend-store-uri sqlite:////mnt/d/DTSC/mlflow-analyzer/data/mlflow.db --port 5000
+if [[ ! -f "$DATABASE" ]]; then
+  echo "Sample database not found: $DATABASE" >&2
+  exit 1
+fi
+
+exec mlflow ui --backend-store-uri "sqlite:///$DATABASE" --port 5000

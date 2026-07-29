@@ -2,7 +2,7 @@
 
 Date: 2026-06-28  
 Branch: `tui`  
-Status: Draft  
+Status: Implemented, pending manual sign-off
 Owner: Saumit Paul
 
 ## Overview
@@ -42,13 +42,13 @@ The **formatter LLM stays in the pipeline**. Textual is a rendering layer only; 
 - Run long agent+formatter invocations in background workers so the UI stays responsive.
 - Preserve Langfuse session lifecycle and graceful shutdown from `app.py`.
 
-## Non-goals (this branch)
+## Non-goals
 
 - Removing or bypassing the formatter LLM.
 - Streaming token output from the agent or formatter (future enhancement).
 - Experiment browser sidebar (phase 2 stretch; listed but not required for parity).
 - `textual serve` browser deployment.
-- Automated pytest harness for the TUI (manual checklist only for now).
+- Full end-to-end agent tests that require Gemini credentials and a populated MLflow server.
 
 ---
 
@@ -246,7 +246,7 @@ sequenceDiagram
 
 ---
 
-### Phase 1b — Status & tool visibility (parity+)
+### Phase 1b — Status & tool visibility
 
 **Tasks**
 
@@ -366,11 +366,11 @@ Reference: Textual `examples/mother.py` chat CSS.
 
 ## Milestone checklist
 
-- [ ] Phase 0: deps + branch
-- [ ] Phase 1: TUI MVP with full feature parity (F1–F19)
-- [ ] Phase 1b: loading status + tool trace
+- [x] Phase 0: dependencies and branch
+- [ ] Phase 1: TUI MVP implementation complete, manual sign-off pending
+- [ ] Phase 1b: loading status and tool trace implementation complete, manual sign-off pending
 - [ ] Phase 2: DataTable, sidebar (stretch)
-- [ ] README + manual test sign-off
+- [ ] README and manual test sign-off
 
 ---
 
