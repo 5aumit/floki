@@ -1,7 +1,7 @@
 # Floki Textual TUI — Implementation Plan
 
-Date: 2026-06-28  
-Branch: `tui`  
+Date: 2026-06-28
+Branch: `tui`
 Status: Implemented, pending manual sign-off
 Owner: Saumit Paul
 
