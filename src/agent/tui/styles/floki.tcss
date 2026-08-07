@@ -1,92 +1,172 @@
+/*
+   Floki uses only the six One Dark tokens from the approved visual brief:
+   Night #282c34, Fog #abb2bf, Signal blue #61afef, Evidence green #98c379,
+   Work amber #e5c07b, and Fault red #e06c75.
+*/
+
 Screen {
     layout: vertical;
-    background: $background;
+    background: #282c34;
+    color: #abb2bf;
+}
+
+#floki-welcome {
+    height: auto;
+    padding: 1 2;
+    background: #282c34;
+    border-bottom: solid #61afef;
+    color: #abb2bf;
 }
 
 #chat-view {
     height: 1fr;
+    min-height: 0;
+    background: #282c34;
+    overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-gutter: stable;
-    background: $background;
+}
+
+#command-deck {
+    height: auto;
+    padding: 0 1;
+    background: #282c34;
+    border-top: solid #abb2bf 35%;
 }
 
 #query-input {
-    dock: bottom;
-    margin: 0 1 1 1;
-    background: $panel;
-    border: solid $primary-darken-2;
-    color: $foreground;
+    width: 100%;
+    margin: 1 0 0 0;
+    background: #282c34;
+    color: #abb2bf;
+    border: solid #abb2bf 35%;
 }
 
 #query-input:focus {
-    border: solid $primary;
+    border: solid #61afef;
+}
+
+#query-input.-disabled {
+    color: #abb2bf 55%;
+    border: solid #abb2bf 20%;
+}
+
+#status-bar,
+#key-help {
+    width: 100%;
+    height: 1;
+    color: #abb2bf 70%;
+    background: #282c34;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #status-bar {
-    dock: bottom;
-    height: 1;
-    padding: 0 1;
-    background: $surface;
-    color: $text-muted;
+    margin: 1 0 0 0;
 }
 
-#tool-trace {
-    display: none;
-    height: auto;
-    max-height: 8;
-    margin: 0 1;
-    border: solid $primary-darken-2;
-}
-
-#tool-trace.visible {
-    display: block;
+#key-help {
+    margin: 0 0 1 0;
 }
 
 QueryLoading {
-    margin: 1 8 1 1;
+    width: 78%;
     height: 1;
-    color: $primary;
+    margin: 1 1 0 1;
+    color: #e5c07b;
 }
 
 UserPrompt {
-    background: $primary 12%;
-    color: $foreground;
-    border: solid $primary 35%;
-    margin: 1 1 1 8;
-    padding: 1 2;
-    width: 100%;
+    width: 72%;
     height: auto;
+    offset-x: 27%;
+    margin: 1 0 0 0;
+    padding: 0 1;
+    color: #abb2bf;
+    background: #282c34;
+    border-right: solid #61afef;
 }
 
 AssistantResponse {
-    border: solid $success 45%;
-    background: $success 10%;
-    margin: 1 8 1 1;
+    width: 78%;
+    height: auto;
+    margin: 1 1 1 1;
     padding: 0 1 1 1;
-    width: 100%;
-    height: auto;
-}
-
-WelcomePanel {
-    width: 100%;
-    height: auto;
-    border: double $primary;
-    padding: 1 2;
-    margin: 1 2;
-    content-align: center middle;
-    background: $background;
+    color: #abb2bf;
+    background: #282c34;
+    border-left: solid #98c379;
 }
 
 FlokiLabel {
-    background: $success;
-    color: $background;
-    text-style: bold;
     width: auto;
     height: 1;
-    padding: 0 1;
-    margin: 1 0 0 1;
+    margin: 0 0 0 0;
+    color: #98c379;
+    text-style: bold;
 }
 
-Markdown {
-    margin: 0 1;
-    color: $foreground;
+SystemNotice {
+    width: 78%;
+    height: auto;
+    margin: 1 1 1 1;
+    padding: 0 1;
+    color: #e06c75;
+    background: #282c34;
+    border-left: solid #e06c75;
+}
+
+AssistantResponse SystemNotice {
+    width: 100%;
+    margin: 1 0 0 0;
+}
+
+Markdown,
+StaticBlock {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    color: #abb2bf;
+}
+
+AssistantResponse Markdown {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+HorizontalScroll.table-scroll {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+Screen.narrow #floki-welcome,
+Screen.compact #floki-welcome {
+    height: auto;
+    padding: 0 1;
+}
+
+Screen.narrow UserPrompt,
+Screen.narrow AssistantResponse,
+Screen.narrow SystemNotice,
+Screen.narrow QueryLoading,
+Screen.compact UserPrompt,
+Screen.compact AssistantResponse,
+Screen.compact SystemNotice,
+Screen.compact QueryLoading {
+    width: 96%;
+}
+
+Screen.narrow UserPrompt,
+Screen.compact UserPrompt {
+    offset-x: 3%;
+}
+
+Screen.compact #command-deck {
+    padding: 0;
+}
+
+Screen.compact #query-input {
+    margin: 0;
 }

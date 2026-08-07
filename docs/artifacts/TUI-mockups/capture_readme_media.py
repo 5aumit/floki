@@ -145,7 +145,7 @@ async def main() -> None:
             for _ in range(30):
                 await pilot.pause(0.25)
                 frames.append((_svg_to_image(app.export_screenshot(title="Floki")), 280))
-                if not app._busy:
+                if app._active_request_id is None:
                     break
 
             await pilot.pause(0.4)

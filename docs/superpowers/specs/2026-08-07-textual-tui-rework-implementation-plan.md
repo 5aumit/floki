@@ -35,7 +35,7 @@ exits the screen before the synchronous query has ended.
 | The screen stays responsive | Runtime setup and one query run in Textual thread workers. Workers only schedule UI work on the event loop. | Headless tests and a manual slow-query check. |
 | The agent path stays unchanged | The query worker calls `run_query_traced(query, on_status=...)` once. | Mock call-count test and runtime contract review. |
 | Formatter, memory, tracing, and REPL stay available | Do not change `run_query()`, `format_to_block_response()`, memory code, or the REPL loop. | Full tests, manual REPL smoke test, and diff review. |
-| Normal and narrow terminals work | TCSS media rules control widths and compact text. Tables scroll horizontally. | Headless size tests and manual size checks. |
+| Normal and narrow terminals work | `FlokiApp` sets responsive `Screen` classes on resize. Valid TCSS class selectors control layout and compact text. Tables scroll horizontally. | Headless size tests and manual size checks. |
 | Shutdown is safe | A single idempotent TUI shutdown path calls Langfuse finish and flush. `src/app.py` does not flush again after a normal TUI exit. | Shutdown call-count test and manual exit check. |
 
 ## Visual implementation brief
@@ -79,7 +79,7 @@ character width.
 | Identity | Bold uppercase plain text, such as `FLOKI`, with one version value. | Fixed welcome panel only. |
 | Reading text | Normal terminal font, sentence case, Fog foreground. | Prompts, Markdown answers, errors, and notices. |
 | Utility text | Normal terminal font with reduced contrast. Short labels use uppercase only where it improves scanning. | Status, key help, version, and provenance rail. |
-| Code and tables | Textual Markdown defaults with horizontal table scrolling. | Code spans, answer tables, and values that need alignment. |
+| Code and tables | Text blocks use Textual `Markdown`. Table blocks use Rich `Markdown` in Textual `Static`, inside horizontal scrolling. | Code spans, answer tables, and values that need alignment. |
 
 Do not fake a display font with ASCII art. Do not use all caps for sentences.
 Keep the exact required welcome and instruction text in sentence case.
@@ -204,6 +204,15 @@ Only `#chat-view` scrolls. `WelcomePanel` and `#command-deck` must not be
 children of it. Do not use `dock` for the command deck or its children. The
 normal vertical screen layout must keep the first and last regions fixed while
 `#chat-view` uses the available height.
+
+### Responsive class contract
+
+Installed Textual 8.2.7 rejects TCSS `@media` syntax. `FlokiApp` must handle
+Textual `Resize` events and set responsive classes on `Screen`. Set `narrow`
+for widths from 60 through 79 columns. Set `compact` for widths below 60
+columns. Remove both classes at widths of 80 columns or more. The two classes
+must not be active at the same time. TCSS must use valid `Screen.narrow` and
+`Screen.compact` selectors to apply the responsive layout.
 
 ### App state and request identity
 
@@ -371,20 +380,25 @@ python -m compileall -q src/agent/tui/widgets
 2. Keep `fallback_content()` as the fallback path. It must use the last agent
    message when available and return a safe string for other result values.
 3. Keep the Floki label as the first child of a non-cancelled assistant
-   response. Render valid formatter text and table blocks as Textual
-   `Markdown` widgets. Do not parse raw tool JSON and do not create a second
-   table data model.
-4. Put table Markdown in a horizontal-scroll container. Give the container a
-   stable class name, such as `table-scroll`, for the TCSS task. Text blocks do
-   not need this wrapper. The table wrapper must preserve table data instead
-   of shrinking it until text is unreadable.
+   response. Render valid formatter text blocks with Textual `Markdown`.
+   Render valid table blocks with Rich `Markdown` in a Textual `Static`. Do
+   not parse raw tool JSON and do not create a second table data model.
+4. Put each table `Static` in a Textual `HorizontalScroll` container. Give the
+   container a stable class name, such as `table-scroll`, for the TCSS task.
+   Text blocks do not need this wrapper. The table wrapper must preserve table
+   data instead of shrinking it until text is unreadable. Use Rich Markdown
+   for tables because its synchronous render makes the table height available
+   before the transcript performs its final scroll. Textual Markdown mounts
+   nested table widgets asynchronously, which can leave the transcript height
+   stale at that point.
 5. Keep a clear `No result.` Markdown message for empty results. Do not show
    Python `None` or raw dictionary output to the user when a usable fallback
    is available.
 6. Write tests before the implementation change for structured preference,
    direct blocks, final-message fallback, empty results, malformed blocks, and
-   text plus table widget mounting. Test only the public helper behavior and
-   mounted child types. Do not test Textual internals.
+   text plus table widget mounting. Assert that a table scroll wrapper contains
+   a Textual `Static` with a Rich `Markdown` renderable. Also test horizontal
+   overflow without tall cell wrapping. Do not test Textual internals.
 
 **Expected result:** formatter output is the single owner of answer structure,
 and table data remains accessible in narrow terminals.
@@ -418,11 +432,15 @@ python -m compileall -q src/agent/tui/blocks.py
 5. Style `SystemNotice`, `QueryLoading`, `FlokiLabel`, Markdown, and
    `.table-scroll`. The table-scroll rule must allow horizontal scrolling and
    must not hide content.
-6. Add a TCSS media rule for widths from 60 through 79 columns. Use near-full
-   transcript width, two short welcome rows, short key help, and reduced model
-   facts. Use TCSS media rules only. Do not add Python terminal-width checks.
-7. Keep a usable fallback below 60 columns. Text may wrap, but the welcome
-   panel, transcript, input, and exit path must remain visible.
+6. Handle Textual `Resize` events in `FlokiApp`. Set `Screen.narrow` for widths
+   from 60 through 79 columns and set `Screen.compact` for widths below 60.
+   Remove both classes at widths of 80 columns or more. This Python code must
+   only select the responsive mode.
+7. Use valid `Screen.narrow` and `Screen.compact` selectors in TCSS. In narrow
+   mode, use near-full transcript width, two short welcome rows, short key
+   help, and reduced model facts. In compact mode, keep the welcome panel,
+   transcript, input, and exit path visible. Text can wrap below 60 columns.
+   Do not use `@media` syntax because installed Textual 8.2.7 rejects it.
 
 **Expected result:** the interface looks like a compact coding-agent command
 surface. The transcript is the largest screen area.

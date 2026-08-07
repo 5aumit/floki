@@ -117,7 +117,18 @@ submission and after final rendering. The user may scroll upward without the
 welcome panel or command deck moving.
 
 `AssistantResponse` first shows a small Floki label. `blocks.render_result()`
-then renders formatter text and table blocks as Textual `Markdown` widgets.
+renders formatter text blocks with Textual `Markdown`. It renders table blocks
+with Rich `Markdown` in a Textual `Static`, inside a Textual
+`HorizontalScroll` container. This keeps Markdown rendering safe, preserves
+table columns, and gives wide tables horizontal scrolling.
+
+The earlier all-Textual-Markdown wording was incomplete. Direct testing showed
+that Textual `Markdown` mounts nested table widgets asynchronously. In this
+case, the transcript height could be stale when final scrolling occurred. The
+table could then end below the visible transcript. Rich `Markdown` renders in
+the `Static` synchronously, so the table height is available before the final
+scroll. This rendering path applies only to formatter table blocks.
+
 If no structured response exists, it renders the last agent message. If there
 is no usable result, it shows a clear no-result message. The UI does not parse
 raw tool JSON into a new table format. The formatter remains the response
@@ -220,7 +231,13 @@ At less than 60 columns, the app remains usable but may wrap status and welcome
 text. It must keep the welcome panel, transcript, composer, and exit path.
 The rework does not promise a polished phone-sized terminal layout.
 
-CSS media rules, not Python width checks, should control these layout changes.
+Installed Textual 8.2.7 rejects TCSS `@media` syntax. `FlokiApp` therefore
+handles Textual `Resize` events and sets one responsive class on `Screen`.
+Widths from 60 through 79 columns use `Screen.narrow`. Widths below 60 columns
+use `Screen.compact`. Widths of 80 columns or more use neither class. Valid
+TCSS class selectors apply the layout for each mode. Python selects the mode,
+and TCSS controls its layout and style.
+
 The theme uses a One Dark based palette already used by Floki: charcoal
 backgrounds, blue for input and user actions, green for assistant success,
 yellow for active work, and red for errors. Color is an aid only. Labels and
@@ -249,8 +266,8 @@ internal trace data by default.
 | File | Change responsibility |
 | --- | --- |
 | `src/app.py` | Make the Textual interface the default interactive mode. Keep `--repl` and the `--tui` compatibility flag. Keep outer interrupt cleanup. |
-| `src/agent/tui/app.py` | Compose the fixed regions, manage initialization, query work, cancellation state, status updates, focus, and shutdown. |
-| `src/agent/tui/styles/floki.tcss` | Define the fixed command-deck layout, normal and narrow media rules, colors, spacing, and visible focus state. |
+| `src/agent/tui/app.py` | Compose the fixed regions, manage initialization, query work, cancellation state, status updates, focus, responsive screen classes, and shutdown. |
+| `src/agent/tui/styles/floki.tcss` | Define the fixed command-deck layout, responsive `Screen` class selectors, colors, spacing, and visible focus state. |
 | `src/agent/tui/widgets/welcome.py` | Render the compact persistent banner and required welcome text. |
 | `src/agent/tui/widgets/chat.py` | Define message rows, the activity row, assistant label, and a `SystemNotice` row for cancelled and error messages. |
 | `src/agent/tui/blocks.py` | Keep formatter block and fallback rendering isolated from app state. |
